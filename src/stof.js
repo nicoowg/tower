@@ -65,7 +65,8 @@ export function klaedOm(rod, t, noegle) {
   rod.traverse((o) => {
     if (!o.isMesh) return;
     const nye = [].concat(o.material).map((m) => {
-      const n = m.name, k = (K1.test(n) ? 'k1' : K2.test(n) ? 'k2' : METAL.test(n) ? 'metal' : m.emissiveIntensity > 0.3 ? 'lys' : null);
+      const lyser = m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0.3;      // kun det, der virkelig lyser (alle materialer fra Blender har en sort lysfarve)
+      const n = m.name, k = (K1.test(n) ? 'k1' : K2.test(n) ? 'k2' : METAL.test(n) ? 'metal' : lyser ? 'lys' : null);
       if (!k || (k === 'metal' && !t.metal) || (k === 'lys' && !t.lys)) return m;
       const id = `${noegle}:${t.id}:${n}`;
       if (!kopier.has(id)) {
@@ -74,7 +75,9 @@ export function klaedOm(rod, t, noegle) {
         else c.color.set(k === 'metal' ? t.metal : t[k]);
         if (k === 'metal' || ((k === 'k1' || k === 'k2') && t.blank)) { c.metalness = t.blank ? 1 : 0.6; c.roughness = t.blank ? 0.22 : 0.4; }
         if ((k === 'k1' || k === 'k2') && t.moenster) laeg(c, ...t.moenster);
-        if (k === 'k2' && t.gloed) { c.emissive.set(t.gloed); c.emissiveIntensity = 0.18; }
+        if (k === 'k2' && t.gloed) { c.emissive.set(t.gloed); c.emissiveIntensity = 0.55; }      // Neon og Lava gløder tydeligt
+        if (k === 'lys' && t.gloed) c.emissiveIntensity = Math.max(c.emissiveIntensity, 3.5);
+        if (k === 'k1' && t.gloed) { c.emissive.set(t.gloed); c.emissiveIntensity = 0.22; }      // et svagt skær over hele kroppen
         kopier.set(id, c);
       }
       return kopier.get(id);

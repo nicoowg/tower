@@ -157,7 +157,7 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .prikker i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .22); transition: width .3s, background .3s; }
 .prikker i.paa { width: 20px; background: #fff; }
 .knap.stor { height: 64px; padding: 0 52px; border-radius: 32px; font-size: 17px; }
-.baner { grid-template-columns: repeat(4, 1fr); }
+.baner { grid-template-columns: repeat(5, 1fr); }
 .bane b { font-size: 14px; }
 .bane span { min-height: 0; }
 
@@ -234,6 +234,14 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .lille-knap:hover { background: rgba(255, 255, 255, .14); }
 .raekke-knapper { display: flex; gap: 10px; }
 .raekke-knapper .knap { flex: 1; }
+
+/* Admin (kun Nico-profilen) */
+#admin { color: var(--orange); }
+.adminpanel { position: absolute; right: 14px; top: 70px; width: 250px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; z-index: 3; }
+.adminpanel h4 { grid-column: 1 / -1; font-size: 11px; letter-spacing: .4px; text-transform: uppercase; color: var(--orange); padding: 2px 4px 4px; }
+.adminpanel button { height: 40px; border-radius: 14px; background: rgba(255, 255, 255, .06); font-size: 12.5px; font-weight: 500; }
+.adminpanel button:hover { background: rgba(255, 255, 255, .12); }
+.adminpanel button.paa { background: var(--orange); color: #000; }
 
 /* Modstanderne under kampen */
 .modstand { position: absolute; right: 14px; top: 70px; width: 230px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }

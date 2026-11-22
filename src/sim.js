@@ -4,6 +4,9 @@ import { TAARNE, FJENDER, BOELGER, BANER, FELT, VEJ, START, SALG, MAKS_MOELLER }
 const T = Object.fromEntries(TAARNE.map((t) => [t.id, t]));
 export const taarnDef = (id) => T[id];
 export const R_TAARN = 26;
+export const TAGBONUS = 1.25;
+// Er punktet på et tag, man kan stå på? Giver tagets højde, ellers 0.
+export function tagVed(bane, x, y) { for (const [x0, y0, x1, y1, h] of bane.tage || []) if (x > x0 + 20 && x < x1 - 20 && y > y0 + 20 && y < y1 - 20) return h; return 0; }
 // De tårne, der kan ramme flyvende fjender. Resten skyder eller kaster langs jorden.
 export const LUFT = new Set(['skud', 'drone', 'vogn', 'lyn', 'skinne', 'straale']);
 export const DRONEBANE = 70;
@@ -95,8 +98,8 @@ function nyFjende(g, type, s = 0) {
 }
 
 // ---------- tårne ----------
-export function tal(t) {               // tårnets tal lige nu, med støtte fra et signal i nærheden
-  const s = t.def.trin[t.trin], b = t.buff;
+export function tal(t) {               // tårnets tal lige nu, med støtte fra et signal i nærheden og en fjerdedel længere rækkevidde fra et tag
+  const s0 = t.def.trin[t.trin], s = t.hoej && s0.r ? { ...s0, r: s0.r * TAGBONUS } : s0, b = t.buff;
   if (!b || t.def.art === 'signal') return s;
   return { ...s, takt: s.takt * (1 - b.fart), r: s.r ? s.r * (1 + b.vidde) : s.r, ser: s.ser || b.syn };
 }
@@ -116,8 +119,9 @@ export function kanPlacere(g, id, x, y) {
   const d = T[id];
   if (!d || g.penge < d.trin[0].pris) return false;
   if (x < 26 || y < 26 || x > FELT.b - 26 || y > FELT.h - 26) return false;
-  if (tilVej(g.bane, x, y) < VEJ / 2 + 21) return false;
-  if (g.bane.spaer?.some(([x0, y0, x1, y1]) => x > x0 - 14 && x < x1 + 14 && y > y0 - 14 && y < y1 + 14)) return false;      // bygninger og lunde
+  const paaTag = tagVed(g.bane, x, y);
+  if (!paaTag && tilVej(g.bane, x, y) < VEJ / 2 + 21) return false;
+  if (!paaTag && g.bane.spaer?.some(([x0, y0, x1, y1]) => x > x0 - 14 && x < x1 + 14 && y > y0 - 14 && y < y1 + 14)) return false;      // bygninger og lunde
   if (g.bane.vand?.some((v) => iFlade(v, x, y))) return false;
   if (g.bane.land && !iFlade(g.bane.land, x, y)) return false;                // på en ø kan man kun bygge på øen
   const slut = g.bane.p[g.bane.p.length - 1];
@@ -129,7 +133,7 @@ export function kanPlacere(g, id, x, y) {
 export function placer(g, id, x, y) {
   if (!kanPlacere(g, id, x, y)) return null;
   const d = T[id];
-  const t = { nr: g.nr++, id, def: d, trin: 0, x, y, v: Math.PI / 2, cd: 0.2, brugt: d.trin[0].pris, maal: 'foerst', buff: null, skudT: -9, drV: Math.random() * 6, raketCd: 2, ramp: 0, laast: 0, stroemT: -9 };
+  const t = { nr: g.nr++, id, def: d, trin: 0, x, y, hoej: tagVed(g.bane, x, y), v: Math.PI / 2, cd: 0.2, brugt: d.trin[0].pris, maal: 'foerst', buff: null, skudT: -9, drV: Math.random() * 6, raketCd: 2, ramp: 0, laast: 0, stroemT: -9 };
   g.penge -= d.trin[0].pris; g.taarne.push(t); regnStoette(g);
   g.fx.push({ a: 'byg', x, y });
   return t;
@@ -306,6 +310,7 @@ export function skridt(g, dt) {
     if (f.s >= g.bane.laengde) {
       f.hp = 0; g.liv -= f.d.liv;
       g.fx.push({ a: 'laek', n: f.d.liv });
+      if (g.liv <= 0 && g.udoedelig) g.liv = 1;
       if (g.liv <= 0) { g.liv = 0; g.fase = 'tabt'; g.fx.push({ a: 'tabt' }); return; }
       continue;
     }

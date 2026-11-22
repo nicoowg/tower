@@ -1,6 +1,8 @@
 // Al lyd laves i browseren, så der ikke ligger lydfiler nogen steder.
 // Hver lyd spilles lidt forskelligt hver gang (tonehøjde og styrke), så det ikke lyder som en maskine.
-let ac = null, ud = null, rum = null, paa = true, stemning = null;
+let ac = null, ud = null, rum = null, paa = true, stemning = null, faktor = 1;
+// Hver lyds styrke i forhold til de andre, sat efter måling (test/lyd.mjs), så de ligger nogenlunde lige højt.
+const NIVEAU = { spor_drone: 3, kast: 4, ild: 3, straale: 3, klik: 1.8, lyn: 2, frost: 1.6, spor_garder: 1.5, doed: 1.6, stoed: 1.6, skinne: 0.45, doed_stor: 0.8, maskine: 0.8, chef: 0.75 };
 const sidst = {};
 const lidt = (n = 0.07) => 1 + (Math.random() * 2 - 1) * n;
 
@@ -9,7 +11,7 @@ function klar() {
   try {
     ac = new AudioContext();
     const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; tryk.connect(ac.destination);
-    ud = ac.createGain(); ud.gain.value = 0.3; ud.connect(tryk);
+    ud = ac.createGain(); ud.gain.value = 0.85; ud.connect(tryk);
     // et rum at klinge i: støj, der dør ud
     const l = ac.sampleRate * 1.8, b = ac.createBuffer(2, l, ac.sampleRate);
     for (let k = 0; k < 2; k++) { const d = b.getChannelData(k); for (let i = 0; i < l; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / l, 2.6); }
@@ -26,7 +28,7 @@ function stoejkilde() {
 function tone(f0, f1, tid, type = 'sine', styrke = 1, klang = 0, ansats = 0.003, naar = 0) {
   const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + naar, p = lidt();
   o.type = type; o.frequency.setValueAtTime(f0 * p, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1 * p), t + tid);
-  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(styrke * lidt(0.15), t + ansats); g.gain.exponentialRampToValueAtTime(0.001, t + tid);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(styrke * faktor * lidt(0.15), t + ansats); g.gain.exponentialRampToValueAtTime(0.001, t + tid);
   o.connect(g); g.connect(ud); if (klang) { const k = ac.createGain(); k.gain.value = klang; g.connect(k).connect(rum); }
   o.start(t); o.stop(t + tid + 0.03);
 }
@@ -34,7 +36,7 @@ function tone(f0, f1, tid, type = 'sine', styrke = 1, klang = 0, ansats = 0.003,
 function sus(tid, frekvens, styrke = 1, q = 1, klang = 0, type = 'bandpass', slut = 0, naar = 0) {
   const s = stoejkilde(), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime + naar, p = lidt();
   f.type = type; f.frequency.setValueAtTime(frekvens * p, t); if (slut) f.frequency.exponentialRampToValueAtTime(slut * p, t + tid); f.Q.value = q;
-  g.gain.setValueAtTime(styrke * lidt(0.15), t); g.gain.exponentialRampToValueAtTime(0.001, t + tid);
+  g.gain.setValueAtTime(styrke * faktor * lidt(0.15), t); g.gain.exponentialRampToValueAtTime(0.001, t + tid);
   s.connect(f).connect(g); g.connect(ud); if (klang) { const k = ac.createGain(); k.gain.value = klang; g.connect(k).connect(rum); }
   s.start(t); s.stop(t + tid + 0.03);
 }
@@ -43,19 +45,19 @@ const akkord = (toner, tid, type, styrke, mellem = 0, klang = 0.4) => toner.forE
 // [mindste antal ms mellem to af samme slags, lyden]
 const L = {
   // tårnenes skud
-  spor_vagt: [40, () => { sus(0.06, 2400, 0.5, 0.8); tone(240, 90, 0.07, 'triangle', 0.5); }],
-  spor_garder: [45, () => { sus(0.05, 3200, 0.45, 0.7); tone(170, 70, 0.05, 'square', 0.22); }],
+  spor_vagt: [40, () => { sus(0.06, 2400, 0.5, 0.8); tone(240, 90, 0.07, 'triangle', 0.5); tone(150, 55, 0.13, 'sine', 0.45); sus(0.22, 1400, 0.22, 0.6, 0.7, 'lowpass', 300); }],
+  spor_garder: [45, () => { sus(0.05, 3200, 0.45, 0.7); tone(170, 70, 0.05, 'square', 0.22); tone(130, 60, 0.09, 'sine', 0.35); sus(0.16, 1600, 0.15, 0.6, 0.6, 'lowpass', 400); }],
   spor_skytte: [80, () => { sus(0.05, 4200, 0.9, 0.6); sus(0.6, 900, 0.55, 0.5, 0.9, 'lowpass', 200); tone(140, 45, 0.18, 'sine', 0.7); }],
-  spor_drone: [50, () => tone(1300, 600, 0.045, 'square', 0.14)],
+  spor_drone: [50, () => { tone(1300, 600, 0.06, 'square', 0.14); sus(0.1, 2600, 0.12, 1, 0.4); }],
   spor_bjoern: [70, () => { sus(0.16, 500, 0.8, 0.5, 0.3, 'lowpass', 120); tone(95, 38, 0.2, 'sine', 0.9); }],
   hagl: [90, () => { sus(0.22, 700, 1.1, 0.5, 0.5, 'lowpass', 150); tone(110, 42, 0.2, 'sine', 0.9); sus(0.04, 5200, 0.5); }],
-  kast: [80, () => sus(0.18, 900, 0.25, 2, 0, 'bandpass', 2600)],
+  kast: [80, () => { sus(0.22, 700, 0.3, 1.5, 0.2, 'bandpass', 2400); tone(320, 180, 0.12, 'triangle', 0.15); }],
   dump: [80, () => { tone(180, 60, 0.16, 'sine', 0.9); sus(0.1, 400, 0.5, 0.6, 0.3); }],
   brag: [70, () => { sus(0.5, 320, 1.4, 0.4, 0.8, 'lowpass', 60); tone(130, 32, 0.38, 'sine', 1); sus(0.08, 3000, 0.4); }],
   lyn: [70, () => { sus(0.14, 5200, 0.6, 4, 0.4); tone(1800, 300, 0.12, 'sawtooth', 0.22); tone(90, 60, 0.12, 'square', 0.2); }],
   skinne: [90, () => { tone(300, 2400, 0.12, 'sawtooth', 0.25); sus(0.4, 2600, 0.7, 1.5, 0.9, 'bandpass', 500, 0.1); tone(160, 40, 0.3, 'sine', 0.8, 0.3, 0.003, 0.1); }],
   frost: [220, () => { tone(2100, 1400, 0.3, 'sine', 0.14, 0.7); tone(3150, 2300, 0.25, 'sine', 0.09, 0.7); sus(0.25, 6500, 0.14, 3, 0.5); }],
-  ild: [90, () => sus(0.16, 900 + Math.random() * 500, 0.24, 0.5, 0, 'bandpass')],
+  ild: [90, () => { sus(0.2, 900 + Math.random() * 500, 0.24, 0.5, 0.2, 'bandpass'); sus(0.2, 220, 0.18, 0.5, 0, 'lowpass'); }],
   straale: [110, () => { tone(520, 540, 0.14, 'sawtooth', 0.07); tone(1040, 1090, 0.14, 'sine', 0.06); }],
   stoed: [70, () => { tone(200, 90, 0.08, 'triangle', 0.5); sus(0.06, 1400, 0.3); }],
   // fjender
@@ -78,6 +80,7 @@ const L = {
   vundet: [0, () => akkord([523, 659, 784, 1047, 1319, 1568], 0.7, 'triangle', 0.26, 0.12, 0.8)],
 };
 // Outfittet giver skuddet sin egen klang oven i våbnets lyd.
+const KLANG_STYRKE = 2.2;
 const KLANG = {
   neon: [60, () => tone(1900, 260, 0.11, 'sawtooth', 0.16)],
   lava: [70, () => sus(0.14, 600, 0.35, 0.6, 0.2, 'lowpass', 160)],
@@ -89,18 +92,18 @@ const KLANG = {
   kbh: [80, () => tone(988, 988, 0.08, 'square', 0.04)],
 };
 export function spil(navn, tema) {
-  if (tema && KLANG[tema] && paa && klar()) { const k = KLANG[tema], nu = performance.now(); if (nu - (sidst['k' + tema] || 0) > k[0]) { sidst['k' + tema] = nu; k[1](); } }
+  if (tema && KLANG[tema] && paa && klar()) { const k = KLANG[tema], nu = performance.now(); if (nu - (sidst['k' + tema] || 0) > k[0]) { sidst['k' + tema] = nu; faktor = KLANG_STYRKE; k[1](); faktor = 1; } }
   const l = L[navn] || (navn.startsWith('spor_') ? L.spor_vagt : null); if (!l || !paa || !klar()) return;
   if (ac.state === 'suspended') ac.resume();
   const nu = performance.now(); if (nu - (sidst[navn] || 0) < l[0] * lidt(0.2)) return;
-  sidst[navn] = nu; l[1]();
+  sidst[navn] = nu; faktor = NIVEAU[navn] || 1; l[1](); faktor = 1;
 }
 
 // Stemningen under det hele: by om natten, hav og vind på øen, eller en stille dyb tone i de tomme rum.
 export function saetStemning(slags) {
   if (stemning) { const s = stemning; s.g.gain.setTargetAtTime(0, ac.currentTime, 0.4); setTimeout(() => { s.dele.forEach((d) => { try { d.stop(); } catch {} }); clearInterval(s.ur); }, 1500); stemning = null; }
   if (!slags || !paa || !klar()) return;
-  const g = ac.createGain(); g.gain.value = 0; g.connect(ud); g.gain.setTargetAtTime(1, ac.currentTime, 1.2);
+  const g = ac.createGain(); g.gain.value = 0; g.connect(ud); g.gain.setTargetAtTime(0.28, ac.currentTime, 1.2);      // under skuddene, ikke over dem
   const dele = [];
   const lag = (frekvens, q, styrke, type = 'lowpass', svaj = 0, svajtid = 7) => {
     const s = stoejkilde(), f = ac.createBiquadFilter(), v = ac.createGain(); f.type = type; f.frequency.value = frekvens; f.Q.value = q; v.gain.value = styrke;
@@ -131,3 +134,23 @@ export function saetStemning(slags) {
   stemning = { g, dele, ur, slags };
 }
 export function saetLyd(til) { paa = til; if (!til) saetStemning(null); }
+
+// Optager en lyd uden højttaler (til at måle og gemme den). Giver lydens tal for begge kanaler.
+export async function optag(navn, tema, sek = 1.5) {
+  const gl = { ac, ud, rum, stoej, paa, stemning };
+  const sr = 44100, off = new OfflineAudioContext(2, Math.round(sr * sek), sr);
+  ac = off; stoej = null; paa = true; stemning = null;
+  const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; tryk.connect(ac.destination);
+  ud = ac.createGain(); ud.gain.value = 0.85; ud.connect(tryk);
+  const l = sr * 1.8, b = ac.createBuffer(2, l, sr);
+  for (let k = 0; k < 2; k++) { const d = b.getChannelData(k); for (let i = 0; i < l; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / l, 2.6); }
+  rum = ac.createConvolver(); rum.buffer = b; const rg = ac.createGain(); rg.gain.value = 0.5; rum.connect(rg).connect(ud);
+  try {
+    if (navn.startsWith('stemning:')) saetStemning(navn.slice(9));
+    else { if (tema && KLANG[tema]) { faktor = KLANG_STYRKE; KLANG[tema][1](); } faktor = NIVEAU[navn] || 1; if (L[navn]) L[navn][1](); faktor = 1; }
+    const buf = await off.startRendering();
+    if (stemning) clearInterval(stemning.ur);
+    return [buf.getChannelData(0), buf.getChannelData(1)];
+  } finally { ({ ac, ud, rum, stoej, paa, stemning } = gl); }
+}
+export const LYDE = () => Object.keys(L);

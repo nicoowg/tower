@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TAARNE, FJENDER, FELT, VEJ } from './data.js';
-import { tal, DRONEBANE } from './sim.js';
+import { tal, DRONEBANE, tagVed, TAGBONUS } from './sim.js';
 import { klaed, klaedOm } from './stof.js';
 import { tema } from './stil.js';
 
@@ -28,7 +28,12 @@ export async function hentModeller(fremskridt) {
 export async function hentBy(navn) {
   if (M[navn]) return;
   const g = await new GLTFLoader().loadAsync(`model/${navn}.glb`);
-  g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+  const bevaeger = /^(spin|tog|baad|bus|kabine|faerge|jolle)/;
+  g.scene.traverse((o) => {
+    if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = true; }
+    let p = o, flytter = false; while (p) { if (bevaeger.test(p.name)) flytter = true; p = p.parent; }
+    if (!flytter) { o.updateMatrix(); o.matrixAutoUpdate = false; }
+  });
   klaed(navn, g.scene); M[navn] = g.scene;
 }
 
@@ -110,11 +115,12 @@ export function lavVisning(laerred, lag) {
   const himmellys = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.55); scene.add(himmellys);
   const sol = new THREE.DirectionalLight(0xfff4ea, 2.6); sol.position.set(-26, 52, 24); sol.castShadow = true;
   Object.assign(sol.shadow.camera, { left: -52, right: 52, top: 36, bottom: -36, near: 5, far: 140 });
-  sol.shadow.mapSize.set(4096, 4096); sol.shadow.bias = -0.0004; sol.shadow.normalBias = 0.04; sol.shadow.radius = 5;
+  sol.shadow.mapSize.set(2048, 2048); sol.shadow.bias = -0.0004; sol.shadow.normalBias = 0.04; sol.shadow.radius = 5;
   scene.add(sol);
   const kant = new THREE.DirectionalLight(0xff5a5a, 0.7); kant.position.set(30, 18, -40); scene.add(kant);
   const kamera = new THREE.PerspectiveCamera(32, 1, 1, 600);
   const k2 = lag.getContext('2d');
+  let tagKanter = [];
   let by = null, byLiv = [], byHjul = [], byLys = {}, biler = [], hav = null, fly = null, naesteDamp = 0, naesteGlimt = 0, neonSluk = 0;
   const sort = new THREE.Color(0x050506), nat = new THREE.Color(0x0a0f1b);
   const himmel = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 256; const k = c.getContext('2d'), f = k.createLinearGradient(0, 0, 0, 256); f.addColorStop(0, '#01020a'); f.addColorStop(0.55, '#070b16'); f.addColorStop(1, '#0d1424'); k.fillStyle = f; k.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
@@ -474,10 +480,13 @@ export function lavVisning(laerred, lag) {
         vec3 sum = texture2D(tF, vUv).rgb, lys = vec3(0.0);
         for (int i = 0; i < 16; i++) {
           float v = float(i) * 2.39996, r = sqrt((float(i) + 0.5) / 16.0); vec2 o = vec2(cos(v), sin(v)) * r * px;
-          sum += texture2D(tF, vUv + o * uskarp * 8.0).rgb;
+          sum += texture2D(tF, vUv + o * uskarp * 9.0).rgb;
           lys += max(texture2D(tF, vUv + o * (5.0 + uskarp * 9.0)).rgb - vec3(1.0), 0.0);
         }
-        gl_FragColor = vec4(sum / 17.0 + lys / 16.0 * gloed, 1.0);
+        vec3 c = sum / 17.0 + lys / 16.0 * gloed;
+        c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, 1.14) * 1.07 + 0.012;      // lidt mere farve og løftede skygger
+        c *= 1.0 - 0.32 * pow(length(vUv - 0.5) * 1.3, 2.4);                           // svag mørk kant
+        gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -485,29 +494,38 @@ export function lavVisning(laerred, lag) {
   });
   const efterScene = new THREE.Scene(), efterKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   efterScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), efterMat));
-  let efter = true, langsom = 0, maalt = 0, skarp = true, bloedt = true;
+  let efter = true, langsom = 0, maalt = 0, skarp = true, bloedt = true, dprSkala = 1;
   function vis_(dt) {
     if (efter) {
       const u = efterMat.uniforms, f = grundAfstand / zoom;
-      u.naer.value = kamera.near; u.fjern.value = kamera.far; u.fokus.value = f; u.skarp.value = f * 0.3 + 5; u.vidde.value = f * 0.85;
+      u.naer.value = kamera.near; u.fjern.value = kamera.far; u.fokus.value = f; u.skarp.value = f * 0.09 + 2; u.vidde.value = f * 0.32;      // miniature: kun midten skarp, som i Form
       renderer.setRenderTarget(billede); renderer.render(scene, kamera); renderer.setRenderTarget(null); renderer.render(efterScene, efterKam);
-      if (dt > 0) { maalt++; if (dt > 1 / 34) langsom++; if (maalt >= 150) { if (langsom > 90) { efter = false; stoerrelse(); } maalt = langsom = 0; } }      // hakker det, så drop det fine
+      if (dt > 0) { maalt++; if (dt > 1 / 45) langsom++; if (maalt >= 90) { const f = dprSkala; if (langsom > 30) dprSkala = Math.max(0.6, dprSkala - 0.12); else if (langsom < 4) dprSkala = Math.min(1, dprSkala + 0.06); if (f !== dprSkala) stoerrelse(); maalt = langsom = 0; } }      // hakker det, så tegn lidt færre punkter; effekterne bliver
     } else renderer.render(scene, kamera);
   }
   function grafik(til) { const nyt = til ?? !efter; if (nyt !== efter) { efter = nyt; stoerrelse(); } return efter; }
   function stoerrelse() {
     bredde = laerred.clientWidth || 1; hoejde = laerred.clientHeight || 1;
-    const dpr = Math.min(skarp ? (efter ? 2 : 1.5) : 1, devicePixelRatio || 1);
+    const dpr = Math.max(0.6, Math.min(skarp ? 1.5 : 1, devicePixelRatio || 1) * dprSkala);
     renderer.setPixelRatio(dpr); renderer.setSize(bredde, hoejde, false);
     billede.setSize(Math.round(bredde * dpr), Math.round(hoejde * dpr)); efterMat.uniforms.px.value.set(1 / bredde, 1 / hoejde);
     lag.width = bredde * dpr; lag.height = hoejde * dpr; k2.setTransform(dpr, 0, 0, dpr, 0, 0);
     kamera.aspect = bredde / hoejde; pas();
   }
-  const straale = new THREE.Raycaster(), plan = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), mus = new THREE.Vector2();
+  const straale = new THREE.Raycaster(), plan = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), tagPlan = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), mus = new THREE.Vector2();
   function tilFelt(cx, cy) {
     const r = laerred.getBoundingClientRect();
     mus.set((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     straale.setFromCamera(mus, kamera);
+    // tagene først: rammer strålen et tag, man kan stå på, er det dér, man peger
+    let bedst = null, bd = Infinity;
+    for (const [x0, y0, x1, y1, h] of g?.bane.tage || []) {
+      tagPlan.constant = -h;
+      if (!straale.ray.intersectPlane(tagPlan, b)) continue;
+      const fx = b.x / K + FELT.b / 2, fy = b.z / K + FELT.h / 2, d = straale.ray.origin.distanceTo(b);
+      if (fx > x0 && fx < x1 && fy > y0 && fy < y1 && d < bd) { bd = d; bedst = { x: fx, y: fy, hoej: h }; }
+    }
+    if (bedst) return bedst;
     if (!straale.ray.intersectPlane(plan, a)) return null;
     return { x: a.x / K + FELT.b / 2, y: a.z / K + FELT.h / 2 };
   }
@@ -536,6 +554,12 @@ export function lavVisning(laerred, lag) {
       borg = new THREE.Group();
     } else { borg = M.borg.clone(true); borg.scale.setScalar(1.25); }
     borg.position.set(X(s[0]), 0, Z(s[1])); scene.add(borg);
+    for (const o of tagKanter) o.removeFromParent(); tagKanter = [];
+    for (const [x0, y0, x1, y1, h] of g.bane.tage || []) {
+      const ind = 12, pkt = [[x0 + ind, y0 + ind], [x1 - ind, y0 + ind], [x1 - ind, y1 - ind], [x0 + ind, y1 - ind]].map(([x, y]) => new THREE.Vector3(X(x), h + 0.06, Z(y)));
+      const o = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pkt), new THREE.LineBasicMaterial({ color: 0xbfe9ff, transparent: true, opacity: 0.35, depthWrite: false }));
+      scene.add(o); tagKanter.push(o);
+    }
     livring = new THREE.Mesh(new THREE.RingGeometry(2.25, 2.4, 96), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthWrite: false }));
     livring.rotation.x = -Math.PI / 2; livring.position.y = 0.05; borg.add(livring); livring.vist = -1;
     stoerrelse();
@@ -548,12 +572,12 @@ export function lavVisning(laerred, lag) {
       fjernSpoegelse(); spoegId = id; spoeg = M[id].clone(true);
       visTrin(spoeg, 0); spoeg.traverse((o) => { if (o.isMesh) { o.material = spoegMat; o.castShadow = false; } }); scene.add(spoeg);
     }
-    spoeg.scale.setScalar(FIG); spoeg.position.set(X(x), 0, Z(y)); spoegMat.color.set(ok ? 0xffffff : ROED);
+    spoeg.scale.setScalar(FIG); spoeg.position.set(X(x), tagVed(g.bane, x, y), Z(y)); spoegMat.color.set(ok ? 0xffffff : ROED);
     visRaekke(x, y, r, ok);
   }
   function visRaekke(x, y, r, ok = true) {
     raekke.visible = !!r; if (!r) return;
-    raekke.position.set(X(x), 0.05, Z(y)); raekke.scale.setScalar(r * K);
+    raekke.position.set(X(x), (g ? tagVed(g.bane, x, y) : 0) + 0.05, Z(y)); raekke.scale.setScalar(r * K);
     rk.material.color.set(ok ? 0xffffff : ROED); rf.material.color.set(ok ? 0xffffff : ROED);
   }
   function vaelg(t) { valgt = t; if (!t) raekke.visible = false; }
@@ -620,7 +644,7 @@ export function lavVisning(laerred, lag) {
       }
       // bevægelser: hop og en omgang rundt ved opgradering, fald ned ved placering, arme der rykker, hoved der ser sig om
       const u = 0, hop = 0, fald = Math.max(0, 1 - alder / 0.22);
-      v.rod.position.y = hop * 1.1 + fald * fald * 4;
+      v.rod.position.y = (t.hoej || 0) + hop * 1.1 + fald * fald * 4;
       if (hop && v.sk && v.drej) v.drej.rotation.y = v.vinkel + u * u * (3 - 2 * u) * Math.PI * 2;
       if (t.skudT !== v.sidstSkud) { v.sidstSkud = t.skudT; v.rykAmp = 0.65 + Math.random() * 0.7; v.rykSide = (Math.random() - 0.5) * 0.12; }
       // små vaner, når der ikke er noget at skyde på: kigge sig om, skifte vægt, se til våbnet, strække sig, trippe
@@ -740,7 +764,7 @@ export function lavVisning(laerred, lag) {
     k2.globalAlpha = 1;
   }
 
-  return { saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
+  return { saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
 }
 
 // Arsenalets drejeskive: én figur ad gangen, i samme lys som banen.

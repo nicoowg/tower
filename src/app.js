@@ -303,6 +303,7 @@ async function startKamp(vs) {
     $('send').innerHTML = SEND.map((s, i) => `<button data-i="${i}">${s.antal > 1 ? s.antal + ' ' : ''}${s.navn}<span>${tal(s.pris)}</span></button>`).join('');
     $('send').querySelectorAll('button').forEach((b) => { b.onclick = () => sendAngreb(SEND[+b.dataset.i]); });
   }
+  $('admin').hidden = !ejerKonto(); $('adminpanel').hidden = true; snyd.paa = {};
   window.skanse = { g, sim, se };
 }
 function vaelgSlot(id) {
@@ -319,10 +320,11 @@ function vaelgTaarn(t) { valgt = t; se.vaelg(t); tegnValgt(); }
 function tegnValgt() {
   const el = $('valgt'); el.hidden = !valgt; if (!valgt) return;
   const t = valgt, d = t.def, nu = d.trin[t.trin], naeste = d.trin[t.trin + 1], pris = sim.opgraderPris(t);
-  const a = linjer(d, nu), b = naeste ? Object.fromEntries(linjer(d, naeste)) : {};
+  const tagR = (s) => (t.hoej && s.r ? { ...s, r: s.r * sim.TAGBONUS } : s);
+  const a = linjer(d, tagR(nu)), b = naeste ? Object.fromEntries(linjer(d, tagR(naeste))) : {};
   if (naeste) for (const [k] of linjer(d, naeste)) if (!a.some((x) => x[0] === k)) a.push([k, '']);
   const skyder = !['moelle', 'signal', 'kaserne', 'frost', 'flamme'].includes(d.art);
-  el.innerHTML = `<header><h3>${d.navn}</h3><span>Trin ${t.trin + 1} af ${d.trin.length}</span></header>
+  el.innerHTML = `<header><h3>${d.navn}</h3><span>${t.hoej ? 'På tag · ' : ''}Trin ${t.trin + 1} af ${d.trin.length}</span></header>
     <div class="tal">${a.map(([k, v]) => `<div>${k}<b>${v}${b[k] && b[k] !== v ? `${v ? ' → ' : ''}<em>${b[k]}</em>` : ''}</b></div>`).join('')}</div>
     ${skyder ? `<div class="vaelger">${[['foerst', 'Første'], ['sidst', 'Sidste'], ['staerk', 'Stærkeste'], ['naer', 'Nærmeste']].map(([k, n]) => `<button data-m="${k}" class="${t.maal === k ? 'paa' : ''}">${n}</button>`).join('')}</div>` : ''}
     ${pris != null ? `<button class="knap hvid" id="op" ${g.penge < pris ? 'disabled' : ''}><span>Opgrader</span><span>${tal(pris)}</span></button>` : ''}
@@ -332,6 +334,25 @@ function tegnValgt() {
   if ($('op')) $('op').onclick = opgrader;
   $('salg').onclick = saelg;
 }
+// ---------- admin: snyd, kun for Nico-profilen ----------
+const snyd = { paa: {} };
+function tegnAdmin() {
+  const el = $('adminpanel'); if (!ejerKonto() || !g) { el.hidden = true; return; }
+  const knap = (k, navn, slaa) => `<button data-s="${k}" class="${slaa && snyd.paa[k] ? 'paa' : ''}">${navn}</button>`;
+  el.innerHTML = '<h4>Admin</h4>' + knap('penge', '+10.000 penge') + knap('liv', '+100 liv') + knap('evigPenge', 'Uendelige penge', 1) + knap('udoedelig', 'Udødelig', 1)
+    + knap('draeb', 'Dræb alle') + knap('max', 'Alt til trin 5') + knap('b10', 'Til bølge 10') + knap('b20', 'Til bølge 20') + knap('b30', 'Til bølge 30') + knap('fart8', '8× fart', 1);
+  el.querySelectorAll('[data-s]').forEach((b) => { b.onclick = () => { brugSnyd(b.dataset.s); tegnAdmin(); }; });
+}
+function brugSnyd(k) {
+  lyd('klik');
+  if (k === 'penge') g.penge += 10000;
+  else if (k === 'liv') g.liv += 100;
+  else if (k === 'evigPenge' || k === 'udoedelig' || k === 'fart8') snyd.paa[k] = !snyd.paa[k];
+  else if (k === 'draeb') { for (const f of g.fjender) if (f.hp > 0) { f.hp = 0; g.fx.push({ a: 'doed', x: f.x, y: f.y, type: f.type, n: 0, nr: f.nr }); } g.koe = []; }
+  else if (k === 'max') { const p = g.penge; g.penge = 1e12; for (const t of g.taarne) while (sim.opgrader(g, t)); g.penge = p; }
+  else if (k[0] === 'b') { const n = +k.slice(1); g.fjender.length = 0; g.koe = []; g.boelge = n - 1; g.fase = 'vent'; g.vent = 1; }
+}
+$('admin').onclick = () => { $('adminpanel').hidden = !$('adminpanel').hidden; tegnAdmin(); lyd('klik'); };
 function sendAngreb(s) {
   if (!g?.versus || g.penge < s.pris || g.liv <= 0) return;
   g.penge -= s.pris; online.send(s); lyd('kast');
@@ -464,7 +485,9 @@ function ramme(nu) {
   if (side === 'hub') { if (SIDER[nr] === 'arsenal') fremviser?.tegn(dt); else if (SIDER[nr] === 'garderobe') fremviser2?.tegn(dt); }
   if (side !== 'kamp' || !g) return;
   if (mellemrum && !mellemrum.spoler && nu - mellemrum.t > 220) { mellemrum.spoler = true; if (pause) $('pause').click(); $('fart').classList.add('paa'); $('fart').textContent = '4×'; }
-  const skridt_ = mellemrum?.spoler ? 4 : fart;
+  const skridt_ = snyd.paa.fart8 ? 8 : mellemrum?.spoler ? 4 : fart;
+  if (snyd.paa.evigPenge) g.penge = Math.max(g.penge, 999999);
+  g.udoedelig = !!snyd.paa.udoedelig; if (g.udoedelig && g.liv < 100) g.liv = 100;
   if (!pause) for (let i = 0; i < skridt_; i++) {
     sim.skridt(g, dt);
     for (const e of g.fx) {
