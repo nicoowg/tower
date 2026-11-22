@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<title>Tower</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="glas.css">
+<script type="importmap">{ "imports": { "three": "./three/build/three.module.min.js", "three/addons/": "./three/examples/jsm/" } }</script>
+</head>
+<body>
+<div class="lys"><i></i><i></i></div>
+
+<section id="hub" class="side" hidden>
+  <header class="hubtop">
+    <b class="logo">Tower</b>
+    <nav class="faner glas" id="faner">
+      <i class="markoer" id="markoer"></i>
+      <button data-s="0">Spil</button><button data-s="1">Online</button><button data-s="2">Arsenal</button><button data-s="3">Garderobe</button><button data-s="4">Butik</button><button data-s="5">Indstillinger</button>
+    </nav>
+    <span class="luft"></span>
+    <button class="pille glas profil" id="profil"><span class="prik" id="ejerprik"></span><b id="navnvis"></b></button>
+    <span class="pille glas"><span class="i" style="--u:url(ikon/gem.svg)"></span><b id="moenter"></b></span>
+  </header>
+  <div class="spor" id="spor">
+
+    <div class="flade" data-navn="spil">
+      <div class="midt">
+        <div class="baner" id="baner"></div>
+        <div class="bund">
+          <div class="udstyr glas" id="udstyr"></div>
+          <button class="knap hvid stor" id="spil">Spil</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flade" data-navn="online">
+      <div class="midt smal" id="online"></div>
+    </div>
+
+    <div class="flade" data-navn="arsenal">
+      <div class="ars">
+        <div class="gitter glas"><div class="rul" id="kort"></div><div class="udstyr" id="udstyr2"></div></div>
+        <aside class="detalje glas">
+          <canvas id="skive"></canvas>
+          <div class="om"><h3 id="dNavn"></h3><p id="dTekst"></p></div>
+          <div class="tal" id="dTal"></div>
+          <div class="trin" id="dTrin"></div>
+          <button class="knap hvid" id="dKnap"></button>
+        </aside>
+      </div>
+    </div>
+
+    <div class="flade" data-navn="garderobe">
+      <div class="ars">
+        <div class="gitter glas"><div class="taarnvalg" id="gTaarne"></div><div class="rul outfits" id="gOutfits"></div></div>
+        <aside class="detalje glas">
+          <canvas id="skive2"></canvas>
+          <div class="om"><h3 id="gNavn"></h3><p id="gSjaeld"></p></div>
+          <div class="trin" id="gTrin"></div>
+          <button class="knap hvid" id="gKnap"></button>
+        </aside>
+      </div>
+    </div>
+
+    <div class="flade" data-navn="butik">
+      <div class="midt">
+        <div class="butikhoved"><h2>Dagens butik</h2><span class="pille glas"><span class="i" style="--u:url(ikon/clock.svg)"></span><b id="nedtaelling"></b></span></div>
+        <div class="butik" id="butik"></div>
+      </div>
+    </div>
+
+    <div class="flade" data-navn="indstillinger">
+      <div class="midt smal"><div class="indst glas" id="indst"></div></div>
+    </div>
+
+  </div>
+  <div class="prikker" id="prikker"></div>
+</section>
+
+<div class="hilsen" id="hilsen" hidden>
+  <div class="kort_ glas">
+    <b class="logo">Tower</b>
+    <input id="navnfelt" maxlength="16" placeholder="Dit navn" spellcheck="false" autocomplete="off">
+    <input id="kodefelt" type="password" placeholder="Adgangskode" hidden autocomplete="off">
+    <span class="fejl" id="navnfejl"></span>
+    <button class="knap hvid" id="navnok">Fortsæt</button>
+  </div>
+</div>
+
+<section id="kamp" class="side" hidden>
+  <canvas id="rum"></canvas><canvas id="lag"></canvas>
+  <header class="top hud">
+    <button class="rund glas" id="forlad" aria-label="Forlad"><span class="i" style="--u:url(ikon/arrow-left.svg)"></span></button>
+    <div class="pille glas status">
+      <span><span class="i" style="--u:url(ikon/heart.svg)"></span><b id="liv"></b></span>
+      <span><span class="i" style="--u:url(ikon/coins.svg)"></span><b id="penge"></b></span>
+      <span class="svag">Bølge <b id="boelge"></b></span>
+    </div>
+    <span class="luft"></span>
+    <button class="rund glas" id="auto" aria-label="Start bølger selv"><span class="i" style="--u:url(ikon/repeat.svg)"></span></button>
+    <button class="rund glas tekst" id="fart" aria-label="Fart">1×</button>
+    <button class="rund glas" id="pause" aria-label="Pause"><span class="i" style="--u:url(ikon/pause.svg)"></span></button>
+    <button class="rund glas" id="lyd" aria-label="Lyd"><span class="i" style="--u:url(ikon/volume-2.svg)"></span></button>
+  </header>
+  <div class="pille glas naeste" id="naeste" hidden><span id="naesteTekst"></span><span id="naesteHvad"></span><button class="lille" id="spring" aria-label="Start nu"><span class="i" style="--u:url(ikon/skip-forward.svg)"></span></button></div>
+  <div class="pille glas boss" id="boss" hidden><b id="bossNavn"></b><i><u id="bossLiv"></u></i></div>
+  <div class="dok glas" id="dok"></div>
+  <aside class="valgt glas" id="valgt" hidden></aside>
+  <div class="slut glas" id="slut" hidden></div>
+  <aside class="modstand glas" id="modstand" hidden></aside>
+  <div class="send glas" id="send" hidden></div>
+</section>
+
+<div class="hent" id="hent"><i><u id="hentLinje"></u></i></div>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

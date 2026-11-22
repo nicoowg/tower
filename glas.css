@@ -1,0 +1,251 @@
+/* Pult-udseendet (samme tal som Værksted og Form): sort bund, to langsomme lys, mørkt glas med en næsten usynlig kant. */
+:root {
+  --roed: rgb(219, 36, 46); --orange: rgb(255, 158, 51); --groen: rgb(92, 255, 156);
+  --t1: rgba(255, 255, 255, .96); --t2: rgba(255, 255, 255, .72); --t3: rgba(255, 255, 255, .42); --t4: rgba(255, 255, 255, .22);
+  --glas: rgba(8, 8, 10, .62); --r-stor: 26px; --r-lille: 12px; --luft: 12px;
+  --skrift: -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: #000; color: var(--t1); font: 13px/1.35 var(--skrift); -webkit-font-smoothing: antialiased; overflow: hidden; user-select: none; -webkit-user-select: none; cursor: default; }
+button { font: inherit; color: inherit; background: none; border: 0; outline: 0; cursor: default; }
+[hidden] { display: none !important; }
+b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.lys { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.lys i { position: absolute; border-radius: 50%; will-change: transform; }
+.lys i:first-child { width: 120vw; height: 120vw; left: -10vw; top: -70vw; background: radial-gradient(closest-side, rgba(219, 36, 46, .30), rgba(219, 36, 46, .07) 55%, transparent); animation: glid1 16s ease-in-out infinite alternate; }
+.lys i:last-child { width: 80vw; height: 80vw; left: 10vw; top: 45vh; background: radial-gradient(closest-side, rgba(255, 255, 255, .07), transparent); animation: glid2 21s ease-in-out infinite alternate; }
+@keyframes glid1 { from { transform: translate(-22vw, -4vh); } to { transform: translate(22vw, 8vh); } }
+@keyframes glid2 { from { transform: translate(15vw, 6vh); } to { transform: translate(-25vw, -6vh); } }
+
+.glas { position: relative; background: var(--glas); border-radius: var(--r-stor); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .07); }
+.i { display: inline-block; flex: none; width: 15px; height: 15px; background: currentColor; -webkit-mask: var(--u) center / contain no-repeat; mask: var(--u) center / contain no-repeat; }
+
+.side { position: fixed; inset: 0; }
+.top { display: flex; align-items: center; gap: var(--luft); height: 44px; }
+.app .top, .app .hoved { -webkit-app-region: drag; }
+.app .top > *, .app .hoved > * { -webkit-app-region: no-drag; }
+.app .top { padding-left: 76px; }
+.luft { flex: 1; }
+.pille { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 22px; font-size: 14px; color: var(--t1); white-space: nowrap; }
+.pille .i { color: var(--t3); }
+.rund { width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center; color: var(--t2); flex: none; }
+.rund:hover, .rund.paa { color: var(--t1); }
+.rund.paa { background: rgba(255, 255, 255, .12); }
+.rund.tekst { font-weight: 600; font-size: 13px; }
+.lille { width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; color: var(--t2); flex: none; }
+.lille:hover { color: var(--t1); background: rgba(255, 255, 255, .09); }
+.knap { height: 52px; padding: 0 30px; border-radius: 26px; font-size: 15px; font-weight: 600; letter-spacing: -.1px; color: var(--t1); transition: transform .12s, background .15s; }
+.knap:hover { background: rgba(255, 255, 255, .08); }
+.knap:active { transform: scale(.97); }
+.knap.hvid { background: #fff; color: #000; }
+.knap.hvid:hover { background: rgba(255, 255, 255, .88); }
+.knap[disabled] { opacity: .32; pointer-events: none; }
+
+/* Forsiden */
+.midt { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 20px; width: min(1120px, 100% - 64px); margin: 0 auto; padding-bottom: 30px; }
+.midt.smal { width: min(620px, 100% - 64px); }
+.hoved { display: flex; align-items: flex-end; justify-content: space-between; }
+h1 { font-size: 76px; font-weight: 700; letter-spacing: -3.5px; line-height: .9; }
+h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
+.baner { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--luft); }
+.bane { display: flex; flex-direction: column; align-items: stretch; padding: 10px 10px 14px; text-align: left; transition: transform .16s, background .16s; }
+.bane canvas { width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; background: rgba(255, 255, 255, .025); display: block; }
+.bane b { font-size: 15px; margin: 10px 8px 0; letter-spacing: -.2px; }
+.bane span { margin: 2px 8px 0; color: var(--t3); min-height: 18px; }
+.bane:hover { transform: translateY(-2px); }
+.bane.paa { background: rgba(255, 255, 255, .10); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
+.bund { display: flex; align-items: center; gap: var(--luft); }
+.udstyr { display: flex; gap: 6px; padding: 8px; flex: 1; }
+.plads { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 12px 0 6px; border-radius: 20px; color: var(--t2); font-weight: 500; }
+.plads img, .slot img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; background: #111; }
+.plads.tom { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07); }
+#udstyr2 .plads:not(.tom):hover, .plads.byt { background: rgba(255, 255, 255, .08); color: var(--t1); }
+.plads.byt { box-shadow: inset 0 0 0 1px var(--orange); }
+
+/* Arsenalet */
+.ars { position: absolute; inset: 0 14px 14px; display: grid; gap: var(--luft); grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: minmax(0, 1fr); }
+.gitter { display: flex; flex-direction: column; overflow: hidden; }
+.gitter .rul { flex: 1; overflow-y: auto; padding: 14px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; align-content: start; scrollbar-width: none; }
+.gitter .rul::-webkit-scrollbar { display: none; }
+.gitter .udstyr { flex: none; margin: 0 8px 8px; background: rgba(255, 255, 255, .035); border-radius: 22px; }
+.kort { position: relative; display: flex; flex-direction: column; padding: 8px 8px 12px; border-radius: 22px; background: rgba(255, 255, 255, .035); text-align: left; transition: background .15s, transform .15s; }
+.kort img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 16px; background: #0b0b0d; }
+.kort b { margin: 10px 6px 0; font-size: 14px; }
+.kort span { margin: 1px 6px 0; color: var(--t3); display: flex; align-items: center; gap: 5px; min-height: 18px; }
+.kort span .i { width: 12px; height: 12px; }
+.kort:hover { background: rgba(255, 255, 255, .07); }
+.kort.paa { background: rgba(255, 255, 255, .11); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
+.kort.laast img { filter: grayscale(1) brightness(.55); }
+.kort.med::after { content: ""; position: absolute; top: 16px; right: 16px; width: 8px; height: 8px; border-radius: 50%; background: var(--roed); box-shadow: 0 0 8px var(--roed); }
+.detalje { display: flex; flex-direction: column; padding: 14px; gap: 14px; overflow: hidden; }
+#skive, #skive2 { width: 100%; flex: 1; min-height: 120px; border-radius: 18px; background: radial-gradient(closest-side, rgba(219, 36, 46, .16), transparent); display: block; }
+.om h3 { font-size: 30px; font-weight: 700; letter-spacing: -1px; }
+.om p { color: var(--t2); margin-top: 4px; min-height: 36px; }
+.tal { display: grid; gap: 1px; }
+.tal div { display: flex; justify-content: space-between; height: 26px; align-items: center; color: var(--t3); }
+.tal div b { color: var(--t1); font-weight: 500; }
+.tal div b em { font-style: normal; color: var(--groen); }
+.trin { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.trin div { padding: 8px 0; border-radius: 12px; background: rgba(255, 255, 255, .045); text-align: center; color: var(--t3); font-size: 11px; }
+.trin div b { display: block; color: var(--t1); font-size: 13px; }
+.trin div:hover { background: rgba(255, 255, 255, .08); }
+.trin div.paa { background: rgba(255, 255, 255, .13); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45); color: var(--t2); }
+
+/* Kampen */
+#kamp .glas { background: rgba(8, 8, 10, .84); }
+#rum, #lag { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#lag { pointer-events: none; }
+.hud { position: absolute; left: 14px; right: 14px; top: 14px; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.hud .luft { pointer-events: none; }
+.status { gap: 22px; }
+.status > span { display: inline-flex; align-items: center; gap: 8px; }
+.status .svag { color: var(--t3); }
+.status .svag b { color: var(--t1); }
+.status .lav { color: var(--orange); } .status .lav .i { color: var(--orange); }
+.naeste { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); gap: 14px; padding: 0 8px 0 18px; height: 40px; font-size: 13px; }
+.naeste #naesteHvad { display: inline-flex; gap: 12px; color: var(--t3); }
+.naeste #naesteHvad em { font-style: normal; color: var(--orange); }
+.boss { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); gap: 14px; height: 40px; }
+.boss i, .hent i { display: block; width: 260px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.boss u, .hent u { display: block; height: 100%; background: var(--roed); border-radius: 3px; }
+.dok { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 6px; padding: 8px; border-radius: 30px; }
+.slot { position: relative; display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 16px 0 8px; border-radius: 22px; text-align: left; transition: background .12s, opacity .15s; }
+.slot div { display: flex; flex-direction: column; line-height: 1.25; }
+.slot div span { color: var(--t3); font-variant-numeric: tabular-nums; }
+.slot kbd { position: absolute; left: 6px; top: 4px; font: 600 9px var(--skrift); color: var(--t3); background: rgba(0, 0, 0, .6); border-radius: 6px; padding: 1px 4px; }
+.slot:hover { background: rgba(255, 255, 255, .07); }
+.slot.paa { background: rgba(255, 255, 255, .14); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
+.slot.dyr { opacity: .38; }
+.valgt { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: 264px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.valgt header { display: flex; align-items: baseline; justify-content: space-between; }
+.valgt h3 { font-size: 22px; font-weight: 700; letter-spacing: -.6px; }
+.valgt header span { color: var(--t3); }
+.valgt .knap { height: 44px; padding: 0 16px; font-size: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.valgt .knap.salg { background: rgba(255, 255, 255, .06); font-weight: 500; }
+.vaelger { display: grid; grid-template-columns: repeat(4, 1fr); padding: 3px; border-radius: 16px; background: rgba(255, 255, 255, .05); }
+.vaelger button { height: 28px; border-radius: 13px; color: var(--t3); font-size: 11.5px; }
+.vaelger button.paa { background: rgba(255, 255, 255, .13); color: var(--t1); }
+.slut { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; padding: 30px; display: flex; flex-direction: column; gap: 18px; text-align: center; background: rgba(8, 8, 10, .86); }
+.slut h3 { font-size: 34px; font-weight: 700; letter-spacing: -1.2px; }
+.slut p { color: var(--t2); font-size: 15px; }
+.slut .to { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.slut .to .knap:first-child { background: rgba(255, 255, 255, .07); }
+.hent { position: fixed; inset: 0; display: grid; place-items: center; background: #000; transition: opacity .4s; }
+.hent.vaek { opacity: 0; pointer-events: none; }
+
+
+/* Forsiden: faner foroven, siderne ligger ved siden af hinanden og glider */
+#hub { display: flex; flex-direction: column; }
+.hubtop { position: relative; z-index: 2; display: flex; align-items: center; gap: var(--luft); height: 72px; padding: 14px 14px 0 24px; flex: none; }
+.app .hubtop { padding-left: 96px; -webkit-app-region: drag; }
+.app .hubtop > * { -webkit-app-region: no-drag; }
+.logo { font-size: 26px; font-weight: 700; letter-spacing: -1.1px; margin-right: 6px; }
+.faner { position: relative; display: flex; padding: 4px; border-radius: 22px; height: 44px; }
+.faner button { position: relative; z-index: 1; height: 36px; padding: 0 16px; border-radius: 18px; color: var(--t3); font-size: 13px; font-weight: 500; transition: color .25s; }
+.faner button:hover { color: var(--t2); }
+.faner button.paa { color: #000; }
+.markoer { position: absolute; top: 4px; height: 36px; border-radius: 18px; background: #fff; transition: transform .42s cubic-bezier(.2, .8, .2, 1), width .42s cubic-bezier(.2, .8, .2, 1); }
+.profil { cursor: default; }
+.profil .prik { width: 7px; height: 7px; border-radius: 50%; background: var(--t4); }
+.profil .prik.ejer { background: var(--orange); box-shadow: 0 0 8px var(--orange); }
+.spor { position: relative; flex: 1; display: flex; transition: transform .55s cubic-bezier(.2, .8, .2, 1); will-change: transform; }
+.flade { position: relative; flex: 0 0 100%; height: 100%; opacity: .25; transition: opacity .45s; }
+.flade.paa { opacity: 1; }
+.prikker { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 8px; }
+.prikker i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .22); transition: width .3s, background .3s; }
+.prikker i.paa { width: 20px; background: #fff; }
+.knap.stor { height: 64px; padding: 0 52px; border-radius: 32px; font-size: 17px; }
+.baner { grid-template-columns: repeat(4, 1fr); }
+.bane b { font-size: 14px; }
+.bane span { min-height: 0; }
+
+/* Garderobe */
+.taarnvalg { display: flex; gap: 6px; padding: 12px 12px 0; overflow-x: auto; scrollbar-width: none; flex: none; }
+.taarnvalg::-webkit-scrollbar { display: none; }
+.taarnvalg button { flex: none; width: 58px; height: 58px; border-radius: 18px; overflow: hidden; background: rgba(255, 255, 255, .04); opacity: .5; transition: opacity .2s; }
+.taarnvalg button img { width: 100%; height: 100%; object-fit: cover; }
+.taarnvalg button.paa { opacity: 1; box-shadow: inset 0 0 0 1.5px #fff; }
+.outfits { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.outfit .mini { width: 100%; aspect-ratio: 1; border-radius: 16px; background: radial-gradient(closest-side at 50% 62%, var(--glod), transparent 75%), #0b0b0d; display: grid; place-items: center; overflow: hidden; margin-bottom: 4px; }
+.outfit .mini img { width: 118%; aspect-ratio: auto; background: none; border-radius: 0; }
+.outfit.laast .mini img { filter: saturate(.7) brightness(.8); }
+.outfit .farver { display: flex; gap: 4px; margin: 8px 6px 0; }
+.outfit .farver i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .25); }
+.sj { font-size: 11px; letter-spacing: .3px; text-transform: uppercase; }
+.sj-Almindelig { color: var(--t3); } .sj-Sjælden { color: #7fd4ff; } .sj-Episk { color: #d48bff; } .sj-Legendarisk { color: var(--orange); }
+
+/* Butik */
+.butikhoved { display: flex; align-items: center; justify-content: space-between; }
+.butikhoved h2 { font-size: 34px; font-weight: 700; letter-spacing: -1.3px; flex: none; }
+.butik { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--luft); }
+.vare { display: flex; flex-direction: column; padding: 10px 10px 14px; text-align: left; transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+.vare:hover { transform: translateY(-4px); }
+.vare .foto { aspect-ratio: 3 / 4; border-radius: 18px; background: radial-gradient(closest-side at 50% 60%, var(--glod, rgba(219, 36, 46, .3)), transparent), rgba(255, 255, 255, .02); display: grid; place-items: center; overflow: hidden; }
+.vare .foto img { width: 120%; }
+.vare b { font-size: 16px; margin: 12px 6px 0; }
+.vare span { margin: 2px 6px 0; color: var(--t3); }
+.vare .pris { display: flex; align-items: center; gap: 6px; margin: 12px 6px 0; color: var(--t1); font-weight: 600; }
+.vare .pris .i { color: var(--t3); }
+.vare.ejet .pris { color: var(--groen); }
+
+/* Indstillinger */
+.indst { padding: 8px; display: flex; flex-direction: column; }
+.indst h4 { font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--t3); padding: 14px 14px 6px; }
+.raekke { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 14px; border-radius: 14px; font-size: 14px; }
+.raekke:hover { background: rgba(255, 255, 255, .04); }
+.kontakt { position: relative; width: 46px; height: 28px; border-radius: 14px; background: rgba(255, 255, 255, .14); transition: background .25s; flex: none; }
+.kontakt::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
+.kontakt.paa { background: var(--groen); }
+.kontakt.paa::after { transform: translateX(18px); }
+.raekke .vaelger { width: 220px; }
+
+/* Navn */
+.hilsen { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(0, 0, 0, .55); }
+.kort_ { width: 360px; padding: 30px; display: flex; flex-direction: column; gap: 14px; background: rgba(8, 8, 10, .9); }
+.kort_ .logo { font-size: 40px; margin-bottom: 6px; }
+.kort_ input, .feltlinje input { height: 50px; border-radius: 16px; padding: 0 18px; background: rgba(255, 255, 255, .06); color: var(--t1); font: 500 15px var(--skrift); border: 0; outline: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06); }
+.kort_ input:focus, .feltlinje input:focus { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .4); }
+.fejl { color: var(--orange); min-height: 0; font-size: 12px; }
+.fejl:empty { display: none; }
+
+/* Online */
+.online h2, #online h2 { flex: none; font-size: 34px; font-weight: 700; letter-spacing: -1.3px; }
+.feltlinje { display: flex; gap: 10px; }
+.feltlinje input { flex: 1; text-transform: uppercase; letter-spacing: 4px; font-weight: 600; }
+.tilstande { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tilstand { height: 74px; border-radius: 20px; background: rgba(255, 255, 255, .045); display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 0 16px; text-align: left; }
+.tilstand b { font-size: 18px; }
+.tilstand span { color: var(--t3); font-size: 12px; }
+.tilstand.paa { background: #fff; color: #000; } .tilstand.paa span { color: rgba(0, 0, 0, .5); }
+.lobby { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.lobbykode { display: flex; align-items: center; justify-content: space-between; }
+.lobbykode b { font-size: 30px; letter-spacing: 6px; font-weight: 700; }
+.hold { display: grid; gap: 10px; }
+.hold.to { grid-template-columns: 1fr 1fr; }
+.holdkort { padding: 10px; border-radius: 18px; background: rgba(255, 255, 255, .035); display: flex; flex-direction: column; gap: 4px; min-height: 60px; }
+.holdkort h5 { font-size: 11px; letter-spacing: .4px; text-transform: uppercase; color: var(--t3); padding: 2px 6px 4px; font-weight: 600; }
+.spiller { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 12px; background: rgba(255, 255, 255, .05); }
+.spiller .prik { width: 7px; height: 7px; border-radius: 50%; background: var(--t4); }
+.spiller.klar .prik { background: var(--groen); box-shadow: 0 0 6px var(--groen); }
+.spiller em { margin-left: auto; font-style: normal; color: var(--t3); font-size: 12px; }
+.lille-knap { height: 38px; padding: 0 16px; border-radius: 19px; background: rgba(255, 255, 255, .08); font-weight: 500; }
+.lille-knap:hover { background: rgba(255, 255, 255, .14); }
+.raekke-knapper { display: flex; gap: 10px; }
+.raekke-knapper .knap { flex: 1; }
+
+/* Modstanderne under kampen */
+.modstand { position: absolute; right: 14px; top: 70px; width: 230px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.modstand .m { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, .04); }
+.modstand .m.ude { opacity: .35; }
+.modstand .m.hold-1 { box-shadow: inset 3px 0 0 #7fd4ff; } .modstand .m.hold-0 { box-shadow: inset 3px 0 0 var(--roed); }
+.modstand .m span { color: var(--t3); font-size: 12px; }
+.modstand .m i { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.modstand .m i u { display: block; height: 100%; background: #fff; }
+.send { position: absolute; left: 14px; bottom: 16px; display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 24px; width: 190px; }
+.send button { height: 40px; padding: 0 14px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--t1); font-weight: 500; }
+.send button span { color: var(--t3); font-variant-numeric: tabular-nums; }
+.send button:hover { background: rgba(255, 255, 255, .07); }
+.send button.dyr { opacity: .35; }
+.saa-valgt .valgt { top: auto; bottom: 90px; transform: none; }
