@@ -56,7 +56,7 @@ function laeg(m, navn, skala, styrke) {
 
 // ---------- outfits ----------
 // Materialerne deles mellem alle figurer af samme slags. Et outfit laver sine egne kopier én gang og genbruger dem.
-const K1 = /^(jakke|haette|hue|hjelm|poncho|kappe|mur$|bunker|panser$|panser2|skab|daek|dronekrop|skaal|lade|silo|flaske|tank$|tank2|kasse$|hjelm\d?)/;
+const K1 = /^(jeepgroen|apcgraa|vogngroen|jakke|haette|hue|hjelm|poncho|kappe|mur$|bunker|panser$|panser2|skab|daek|dronekrop|skaal|lade|silo|flaske|tank$|tank2|kasse$|hjelm\d?)/;
 const K2 = /^(bukser|vest|rygsaek|hat$|baret|forklaede|pels|tag$|bunkertag|ladetag|vest2|saek)/;
 const METAL = /^(staal|moerk|kobber|fjendestaal)/;
 const kopier = new Map();

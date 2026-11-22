@@ -22,7 +22,7 @@ if (!gem || !Array.isArray(gem.ejer)) gem = { moenter: START.moenter, ejer: [...
 if (!BANER.some((b) => b.id === gem.bane)) gem.bane = BANER[0].id;      // banen findes ikke mere
 gem.outfits ||= [];                // de outfits, man ejer
 gem.paa ||= {};                    // hvilket outfit hvert tårn har på
-gem.indst = { grafik: true, skygger: true, skarp: true, stemning: true, glid: true, online: true, ...(gem.indst || {}) };
+gem.indst = { grafik: true, skygger: true, skarp: true, stemning: true, glid: true, online: true, diorama: true, ...(gem.indst || {}) };
 let macTillader = true;            // i Mac-appen kan zfeeka slå online fra
 const husk = () => { try { localStorage.setItem(NOEGLE, JSON.stringify(gem)); } catch {} };
 const ejerKonto = () => !!gem.ejerKonto;
@@ -216,7 +216,7 @@ function butik() {
 
 // ---------- Indstillinger ----------
 const INDST = [
-  ['Billede', [['grafik', 'Dybdeskarphed og glød'], ['skygger', 'Skygger'], ['skarp', 'Høj opløsning'], ['glid', 'Bløde kamerabevægelser']]],
+  ['Billede', [['diorama', 'Byer som ø'], ['grafik', 'Dybdeskarphed og glød'], ['skygger', 'Skygger'], ['skarp', 'Høj opløsning'], ['glid', 'Bløde kamerabevægelser']]],
   ['Lyd', [['lyd', 'Lyd'], ['stemning', 'Baggrundslyd']]],
   ['Spil', [['auto', 'Start næste bølge selv'], ['online', 'Online']]],
 ];
@@ -237,7 +237,7 @@ function saetVaerdi(k, v) {
 }
 function brugIndst() {
   if (!se) return;
-  se.grafik(gem.indst.grafik); se.skygger(gem.indst.skygger); se.saetSkarp?.(gem.indst.skarp); se.saetGlid?.(gem.indst.glid);
+  se.saetDiorama?.(gem.indst.diorama); se.grafik(gem.indst.grafik); se.skygger(gem.indst.skygger); se.saetSkarp?.(gem.indst.skarp); se.saetGlid?.(gem.indst.glid);
 }
 
 const stemningFor = (b) => (b.oe ? 'oe' : b.tema || (b.by ? 'by' : 'rum'));

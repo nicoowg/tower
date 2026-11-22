@@ -5,6 +5,8 @@ const T = Object.fromEntries(TAARNE.map((t) => [t.id, t]));
 export const taarnDef = (id) => T[id];
 export const R_TAARN = 26;
 export const TAGBONUS = 1.25;
+// Kasernen sender bedre tropper for hvert trin: soldater, en hurtig jeep, en pansret vogn og til sidst en kampvogn, der også skyder.
+const ENHEDER = [{ type: 'enhed', fart: 62, hp: 1 }, { type: 'enhed', fart: 62, hp: 1 }, { type: 'jeep', fart: 118, hp: 0.8 }, { type: 'apc', fart: 72, hp: 1.7 }, { type: 'kampvogn', fart: 52, hp: 2.6, skud: 0.12 }];
 // Er punktet på et tag, man kan stå på? Giver tagets højde, ellers 0.
 export function tagVed(bane, x, y) { for (const [x0, y0, x1, y1, h] of bane.tage || []) if (x > x0 + 20 && x < x1 - 20 && y > y0 + 20 && y < y1 - 20) return h; return 0; }
 // De tårne, der kan ramme flyvende fjender. Resten skyder eller kaster langs jorden.
@@ -190,7 +192,8 @@ function taarnSkridt(g, t, dt) {
   if (art === 'kaserne') {
     if (g.fase === 'kamp' && t.cd <= 0) {
       t.cd = s.takt;
-      g.enheder.push({ nr: g.nr++, s: g.bane.laengde - 30, hp: s.skade, max: s.skade, fart: 62, x: 0, y: 0, v: 0 });
+      const e = ENHEDER[t.trin], hp = Math.round(s.skade * e.hp);
+      g.enheder.push({ nr: g.nr++, type: e.type, s: g.bane.laengde - 30, hp, max: hp, fart: e.fart, skud: e.skud ? { skade: s.skade * e.skud, cd: 0.5 } : null, x: 0, y: 0, v: 0 });
       t.skudT = g.t;
     }
     if (t.cd < 0) t.cd = 0;
@@ -325,6 +328,10 @@ export function skridt(g, dt) {
     u.s -= u.fart * dt;
     if (u.s <= 0) { u.hp = 0; continue; }
     sted(g.bane, u.s, u);
+    if (u.skud) {                              // kampvognen skyder på den nærmeste fjende
+      u.skud.cd -= dt;
+      if (u.skud.cd <= 0) { const f = vaelg(g, u.x, u.y, 160, true, 'naer', false); if (f) { u.skud.cd = 0.7; ramt(g, f, u.skud.skade); g.fx.push({ a: 'enhedskud', x1: u.x, y1: u.y, x2: f.x, y2: f.y }); } else u.skud.cd = 0; }
+    }
     for (const f of g.fjender) {
       if (f.hp <= 0 || f.d.luft || Math.abs(f.s - u.s) > f.d.r + 10) continue;
       const d = Math.min(u.hp, f.hp);

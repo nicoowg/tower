@@ -10,7 +10,7 @@ import { tema } from './stil.js';
 const K = 0.05;                                   // banens enheder -> meter i rummet
 const FIG = 1.3;                                  // figurerne er lidt større end deres plads på banen, så de kan ses
 const X = (x) => (x - FELT.b / 2) * K, Z = (y) => (y - FELT.h / 2) * K;
-const NAVNE = [...TAARNE.map((t) => t.id), ...Object.keys(FJENDER), 'enhed', 'borg'];
+const NAVNE = [...TAARNE.map((t) => t.id), ...Object.keys(FJENDER), 'enhed', 'borg', 'jeep', 'apc', 'kampvogn'];
 const M = {};
 const ROED = 0xdb242e, ORANGE = 0xff9e33;
 
@@ -174,6 +174,32 @@ export function lavVisning(laerred, lag) {
       const o = new THREE.Mesh(new THREE.PlaneGeometry(420, 70, 120, 1), m); o.position.set(-30 + i * 40, 58 + i * 12, -150 - i * 30); o.rotation.x = 0.25; scene.add(o); nordlys.push(o);
     }
   }
+  // Diorama: byen skæres af ved banens kant og står på en sokkel af klippelag med hav rundt om, som Færøerne.
+  const SKUMRING = { std: [[0, '#0a1020'], [0.55, '#1c2a40'], [0.85, '#3b4a62'], [1, '#6a6f82']], sakura: [[0, '#140a1c'], [0.55, '#2e1a36'], [0.85, '#5a3450'], [1, '#8a5a70']], sne: [[0, '#081424'], [0.55, '#1a2e48'], [0.85, '#3c5874'], [1, '#7f97ad']], tech: [[0, '#070520'], [0.55, '#1a0f40'], [0.85, '#3a1f64'], [1, '#6a3c8a']] };
+  let klip = [], diorama = true;
+  function dioramaOp() {
+    const kant = 6, x0 = X(-kant), x1 = X(FELT.b + kant), z0 = Z(-kant), z1 = Z(FELT.h + kant);
+    klip = [new THREE.Plane(new THREE.Vector3(1, 0, 0), -x0), new THREE.Plane(new THREE.Vector3(-1, 0, 0), x1), new THREE.Plane(new THREE.Vector3(0, 0, 1), -z0), new THREE.Plane(new THREE.Vector3(0, 0, -1), z1)];
+    renderer.localClippingEnabled = true;
+    const set = new Set();
+    by.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) set.add(m); });
+    if (grund) set.add(grund.material);
+    for (const m of set) { m.clippingPlanes = klip; m.needsUpdate = true; }
+    // soklen: tre klippelag, der skråner en smule udad, og en græs- eller fortovskant foroven
+    const H_ = 3.2, b = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const lag = [[0, 1.0, 0x1b1e22], [-0.9, 1.006, 0x25292e], [-1.9, 1.012, 0x1b1e22]];
+    for (const [y, s_, farve] of lag) {
+      const o = new THREE.Mesh(new THREE.BoxGeometry(b * s_, 1.0, d * s_), new THREE.MeshStandardMaterial({ color: farve, roughness: 0.92 }));
+      o.position.set(cx, y - 0.56, cz); o.receiveShadow = true; scene.add(o); natTing.push(o);      // toppen lige under jorden, så de ikke kæmper om de samme punkter
+    }
+    const bund = new THREE.Mesh(new THREE.BoxGeometry(b * 1.02, H_ - 2.9 + 0.3, d * 1.02), new THREE.MeshStandardMaterial({ color: 0x25292e, roughness: 0.92 }));
+    bund.position.set(cx, -2.9 - (H_ - 2.9) / 2, cz); scene.add(bund); natTing.push(bund);
+    const hav_ = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshBasicMaterial({ color: g.bane.tema === 'sne' ? 0x8ea6b8 : 0x0c2531 }));
+    hav_.rotation.x = -Math.PI / 2; hav_.position.y = -H_; scene.add(hav_); natTing.push(hav_);
+    const sk = SKUMRING[g.bane.tema] || SKUMRING.std;
+    scene.background = himmelAf(sk); scene.fog = new THREE.Fog(new THREE.Color(sk[2][1]), 100, 330);
+    sol.color.set(0xffe0bb); sol.intensity = 2.2; himmellys.intensity = 0.7; himmellys.color.set(0x9fc0dc); scene.environmentIntensity = 0.5;
+  }
   function natOp() {                           // alt det, der kun hører til byen om natten
     const H = HIMMEL[g.bane.tema];
     scene.background = H ? H.h : himmel; scene.fog = new THREE.Fog(H ? H.taage : nat, 100, 330);
@@ -186,14 +212,16 @@ export function lavVisning(laerred, lag) {
       for (const m of [].concat(o.material)) { if (m.name === 'colpatria') byFarve = m; if (/^(fyr|rude|neon|krone)/.test(m.name) && !byLys[m.name]) byLys[m.name] = { m, e: m.emissiveIntensity }; }
     });
     const plan_ = (farve, b, d, x, y, z) => { const o = new THREE.Mesh(new THREE.PlaneGeometry(b, d), new THREE.MeshBasicMaterial({ color: farve })); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); scene.add(o); natTing.push(o); };
-    plan_(0x07080c, 900, 900, 20, -0.03, 0);                                    // landjorden ud til horisonten
-    if (g.bane.hav) plan_(0x06111b, 900, 300, 20, -0.02, Z(1010) + 150);         // havet mod syd
-    for (let i = 0; i < 90; i++) { const b = { o: new THREE.Mesh(bilG, bilHvid) }; nyTur(b, true); scene.add(b.o); biler.push(b); }
+    if (!diorama) plan_(0x07080c, 900, 900, 20, -0.03, 0);                                    // landjorden ud til horisonten
+    if (g.bane.hav && !diorama) plan_(0x06111b, 900, 300, 20, -0.02, Z(1010) + 150);         // havet mod syd
+    if (diorama) dioramaOp();
+    else for (let i = 0; i < 90; i++) { const b = { o: new THREE.Mesh(bilG, bilHvid) }; nyTur(b, true); scene.add(b.o); biler.push(b); }
     fly = new THREE.Mesh(kugleG, new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })); fly.scale.setScalar(0.22); scene.add(fly);
   }
   function natNed() {
     scene.background = sort; scene.fog = null; sol.color.set(0xfff4ea); sol.intensity = 2.6; himmellys.intensity = 0.55; himmellys.color.set(0xffffff); scene.environmentIntensity = 0.55;
     oeNed();
+    if (klip.length && by) { by.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) { m.clippingPlanes = null; m.needsUpdate = true; } }); } klip = [];
     vejr?.o.removeFromParent(); vejr = null; for (const o of nordlys) o.removeFromParent(); nordlys = [];
     for (const b of biler) b.o.removeFromParent(); biler = []; for (const o of natTing) o.removeFromParent(); natTing = []; fly?.removeFromParent(); fly = null; byLys = {}; byFarve = null;
   }
@@ -353,7 +381,7 @@ export function lavVisning(laerred, lag) {
   function vaelgDele(v, trin) {
     const find = (n) => (trin >= 4 && v.rod.getObjectByName(n + '5')) || v.rod.getObjectByName(n);
     v.sk = find('skuldre'); v.hoved = find('hoved'); v.vaaben = find('vaaben'); v.munding = find('munding'); v.benV = find('benV'); v.benH = find('benH');
-    v.mand = trin >= 4 ? null : v.rod.getObjectByName('mand'); v.mech = trin >= 4 && !!v.rod.getObjectByName('skuldre5');
+    v.mand = trin >= 4 ? null : v.rod.getObjectByName('mand'); v.mech = trin >= 4 && !!v.rod.getObjectByName('skuldre5'); v.platform = trin >= 4 && !!v.rod.getObjectByName('platform5');
     v.hvil = v.vaaben ? v.vaaben.position.clone() : null;
     if (v.benV) { v.bV0 = v.benV.rotation.x; v.bH0 = v.benH.rotation.x; }
   }
@@ -411,6 +439,7 @@ export function lavVisning(laerred, lag) {
     } else if (e.a === 'tjen') tekst(e.x, e.y, 3.4, '+' + e.n, 'rgba(92,255,156,.95)');
     else if (e.a === 'byg' || e.a === 'op') ringFx(e.x, e.y, e.a === 'op' ? 34 : 26, 0xffffff, 0.4, 0.7);
     else if (e.a === 'salg') { a.set(X(e.x), 0.8, Z(e.y)); gnist(a, 0, 2, 0, 0.25, 0xffffff, 0.3, 1.1, 0.35); }
+    else if (e.a === 'enhedskud') { a.set(X(e.x1), 0.9, Z(e.y1)); b.set(X(e.x2), 0.7, Z(e.y2)); streg(a, b, 0.06, 0xfff1d0, 0.08); gnist(b, 0, 2, 0, 0.18, 0xffc45a, 0.18, 0.03); }
     else if (e.a === 'stoed') { a.set(X(e.x), 0.8, Z(e.y)); gnist(a, 0, 2, 0, 0.14, 0xffffff, 0.15, 0.5, 0.7); }
     else if (e.a === 'dump' && v) { mundingen(v, a); gnist(a, 0, 4, 0, 0.3, 0xcccccc, 0.15, 0.5, 0.4); }
     if (e.a === 'op' && v) v.op = tid;          // selve forvandlingen tegnes, når tårnet skifter trin
@@ -426,6 +455,7 @@ export function lavVisning(laerred, lag) {
     const gx = FELT.b / 2 * K, gz = FELT.h / 2 * K;                     // udsnittet kan flyttes frit, så længe man ser på banen
     midte.x = Math.max(-gx, Math.min(gx, midte.x)); midte.z = Math.max(-gz + 0.5, Math.min(gz + 0.5, midte.z));
     kamera.position.copy(midte).addScaledVector(ret, grundAfstand / zoom); kamera.lookAt(midte); kamera.updateMatrixWorld();
+    if (scene.fog) { scene.fog.near = grundAfstand / zoom + 55; scene.fog.far = grundAfstand / zoom + 230; }      // disen begynder altid bag banen, aldrig oven på den
   }
   function pas() {
     const top = 74 / hoejde * 2, bund = 128 / hoejde * 2, side = 24 / bredde * 2, m0 = new THREE.Vector3(0, 0, 0.5);
@@ -438,7 +468,6 @@ export function lavVisning(laerred, lag) {
     const [y0, y1] = se_(hi);
     forskyd = ((y0 + y1) / 2 - (bund - top) / 2) * hoejde / 2;       // skub billedet, så banen ligger midt mellem top- og bundlinjen
     kamera.setViewOffset(bredde, hoejde, 0, -forskyd, bredde, hoejde);
-    if (scene.fog) { scene.fog.near = grundAfstand * 1.05; scene.fog.far = grundAfstand * 2.7; }
     stil();
   }
   // Alt, man gør med kameraet, sætter et mål. Kameraet glider derhen, så intet rykker.
@@ -478,12 +507,13 @@ export function lavVisning(laerred, lag) {
         float z = texture2D(tD, vUv).x * 2.0 - 1.0, d = 2.0 * naer * fjern / (fjern + naer - z * (fjern - naer));
         float uskarp = clamp((abs(d - fokus) - skarp) / vidde, 0.0, 1.0);
         vec3 sum = texture2D(tF, vUv).rgb, lys = vec3(0.0);
-        for (int i = 0; i < 16; i++) {
-          float v = float(i) * 2.39996, r = sqrt((float(i) + 0.5) / 16.0); vec2 o = vec2(cos(v), sin(v)) * r * px;
-          sum += texture2D(tF, vUv + o * uskarp * 9.0).rgb;
-          lys += max(texture2D(tF, vUv + o * (5.0 + uskarp * 9.0)).rgb - vec3(1.0), 0.0);
+        float drej_ = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;      // hvert punkt drejer mønstret lidt, så der ikke opstår stjerner
+        for (int i = 0; i < 24; i++) {
+          float v = float(i) * 2.39996 + drej_, r = sqrt((float(i) + 0.5) / 24.0); vec2 o = vec2(cos(v), sin(v)) * r * px;
+          sum += texture2D(tF, vUv + o * uskarp * 7.0).rgb;
+          lys += max(texture2D(tF, vUv + o * (5.0 + uskarp * 7.0)).rgb - vec3(1.0), 0.0);
         }
-        vec3 c = sum / 17.0 + lys / 16.0 * gloed;
+        vec3 c = sum / 25.0 + lys / 24.0 * gloed;
         c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, 1.14) * 1.07 + 0.012;      // lidt mere farve og løftede skygger
         c *= 1.0 - 0.32 * pow(length(vUv - 0.5) * 1.3, 2.4);                           // svag mørk kant
         gl_FragColor = vec4(c, 1.0);
@@ -500,7 +530,7 @@ export function lavVisning(laerred, lag) {
       const u = efterMat.uniforms, f = grundAfstand / zoom;
       u.naer.value = kamera.near; u.fjern.value = kamera.far; u.fokus.value = f; u.skarp.value = f * 0.09 + 2; u.vidde.value = f * 0.32;      // miniature: kun midten skarp, som i Form
       renderer.setRenderTarget(billede); renderer.render(scene, kamera); renderer.setRenderTarget(null); renderer.render(efterScene, efterKam);
-      if (dt > 0) { maalt++; if (dt > 1 / 45) langsom++; if (maalt >= 90) { const f = dprSkala; if (langsom > 30) dprSkala = Math.max(0.6, dprSkala - 0.12); else if (langsom < 4) dprSkala = Math.min(1, dprSkala + 0.06); if (f !== dprSkala) stoerrelse(); maalt = langsom = 0; } }      // hakker det, så tegn lidt færre punkter; effekterne bliver
+      if (dt > 0) { maalt++; if (dt > 1 / 40) langsom++; if (maalt >= 240) { const f = dprSkala; if (langsom > 90) dprSkala = Math.max(0.75, dprSkala - 0.1); else if (langsom < 3 && dprSkala < 1) dprSkala = Math.min(1, dprSkala + 0.05); if (f !== dprSkala) stoerrelse(); maalt = langsom = 0; } }      // hakker det, så tegn lidt færre punkter; effekterne bliver
     } else renderer.render(scene, kamera);
   }
   function grafik(til) { const nyt = til ?? !efter; if (nyt !== efter) { efter = nyt; stoerrelse(); } return efter; }
@@ -634,7 +664,8 @@ export function lavVisning(laerred, lag) {
         let d = Math.PI / 2 - t.v - v.vinkel; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;       // drejer som en fjeder: lidt for langt og tilbage
         v.vf += (d * v.stiv - v.vf * 1.45 * Math.sqrt(v.stiv)) * dt; v.vinkel += v.vf * dt; v.drej.rotation.y = v.vinkel;
       } else if (art === 'frost') { v.vinkel += dt * (siden < 0.4 ? 5 : 0.4); v.drej.rotation.y = v.vinkel; }
-      if (v.drej && v.dy != null && art !== 'vogn') v.drej.position.y = v.dy + Math.sin(tid * 2 + v.fase) * 0.012;
+      if (v.drej && v.dy != null && art !== 'vogn') v.drej.position.y = v.dy + Math.sin(tid * 2 + v.fase) * 0.012 + (v.platform ? 0.55 + Math.sin(tid * 1.6 + v.fase) * 0.06 : 0);      // platformen svæver og vugger
+      if (v.platform && Math.random() < dt * 8) { const w = Math.random() * 6.28; a.set(v.rod.position.x + Math.cos(w) * 0.7, v.rod.position.y + 0.35, v.rod.position.z + Math.sin(w) * 0.7); gnist(a, 0, -0.6, 0, 0.5, 0x5ce0ff, 0.06, 0.01, 0.8); }
       if (v.vaaben) {
         const ryk = Math.max(0, 1 - siden / (art === 'skud' && t.id === 'skytte' ? 0.35 : 0.13));
         v.vaaben.position.copy(v.hvil);
@@ -694,12 +725,12 @@ export function lavVisning(laerred, lag) {
     for (const [nr, v] of taarne) if (!set.has(nr)) { v.rod.removeFromParent(); v.bjaelke?.removeFromParent(); v.kerne?.removeFromParent(); taarne.delete(nr); }
 
     // fjender og egne tropper
-    for (const [liste, kort, lav] of [[g.fjender, fjender, lavFjende], [g.enheder, enheder, (u) => { const v = lavFjende({ type: 'enhed', d: { str: 0.62 } }); return v; }]]) {
+    for (const [liste, kort, lav] of [[g.fjender, fjender, lavFjende], [g.enheder, enheder, (u) => { const v = lavFjende({ type: u.type || 'enhed', d: { str: u.type && u.type !== 'enhed' ? 0.7 : 0.62 } }); klaedOm(v.rod, tema(outfits.kaserne), 'kaserne'); return v; }]]) {
       set.clear();
       for (const f of liste) {
         set.add(f.nr);
         let v = kort.get(f.nr); if (!v) { v = lav(f); kort.set(f.nr, v); }
-        const fjende = liste === g.fjender, fart = fjende ? f.d.fart * f.brems : f.fart, str = (fjende ? f.d.str : 0.62) * FIG;
+        const fjende = liste === g.fjender, fart = fjende ? f.d.fart * f.brems : f.fart, str = (fjende ? f.d.str : f.type && f.type !== 'enhed' ? 0.7 : 0.62) * FIG;
         v.fase += dt * fart * v.takt * (fjende ? 0.16 / Math.sqrt(f.d.r / 10) : 0.14);
         v.rod.position.set(X(f.x - Math.sin(f.v) * v.side), Math.abs(Math.sin(v.fase)) * 0.07 * str, Z(f.y + Math.cos(f.v) * v.side));
         v.rod.rotation.y = fjende ? Math.PI / 2 - f.v : -Math.PI / 2 - f.v;
@@ -764,7 +795,7 @@ export function lavVisning(laerred, lag) {
     k2.globalAlpha = 1;
   }
 
-  return { saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
+  return { saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, saetDiorama: (v) => { diorama = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
 }
 
 // Arsenalets drejeskive: én figur ad gangen, i samme lys som banen.
