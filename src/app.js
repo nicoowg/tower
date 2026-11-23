@@ -1,7 +1,7 @@
 // Skærmene: forside, arsenal og kamp. Reglerne er i sim.js, det man ser i se.js.
 import { TAARNE, FJENDER, BANER, START, MAKS_MOELLER, LAAS_BOELGE } from './data.js';
 import * as sim from './sim.js';
-import { hentModeller, hentBy, lavVisning, lavFremviser } from './se.js';
+import { hentModeller, hentBy, lavVisning, lavFremviser, hentHelte, heltKlar } from './se.js';
 import { spil as lyd, saetLyd, saetStemning, pludre } from './lyd.js';
 import { TEMAER, tema, sjaeldenhed, outfitId, dagensButik, tidTilNyButik, dag, ejerNavn, tjekEjer } from './stil.js';
 import { lavOnline, SEND } from './online.js';
@@ -68,7 +68,23 @@ function gaaTil(n, lydløs) {
   if (!lydløs) lyd('klik');
   tegnSide();
 }
+// De nye helte hentes, før en side viser dem; siden tegnes igen, når de er kommet.
+let venter = '';
+function hentTil(par) {
+  const mangler = par.filter(([id, t]) => !heltKlar(id, t));
+  if (!mangler.length) return;
+  const n = mangler.map((p) => p.join(':')).join(','); if (venter === n) return; venter = n;
+  hentHelte(mangler).then(() => { venter = ''; if (side === 'hub') tegnSide(); });
+}
+function heltePar() {
+  const s = SIDER[nr];
+  if (s === 'garderobe') return TEMAER.map((t) => [gTaarn, t.id]);
+  if (s === 'butik' || s === 'start') return [...dagensButik().map((o) => [o.taarn, o.tema]), ...(startFigur ? [[startFigur, gem.paa[startFigur] || 'std']] : [])];
+  if (s === 'arsenal') return [[valgtKort, gem.paa[valgtKort] || 'std']];
+  return [];
+}
 function tegnSide() {
+  hentTil(heltePar());
   $('moenter').textContent = ejerKonto() ? '∞' : tal(gem.moenter);
   $('navnvis').textContent = gem.navn || ''; $('ejerprik').classList.toggle('ejer', ejerKonto());
   ({ start: startSide, spil: spilSide, online: onlineSide, arsenal, garderobe, butik, indstillinger })[SIDER[nr]]();
@@ -241,8 +257,9 @@ let butikDag = null, butikUr = 0;
 function butik() {
   fotograf ||= lavFremviser(document.createElement('canvas'));
   const varer = dagensButik(), el = $('butik');
-  if (butikDag !== dag() || el.dataset.ejer !== String(ejerKonto()) || el.dataset.n !== String(gem.outfits.length)) {
-    butikDag = dag(); el.dataset.ejer = ejerKonto(); el.dataset.n = gem.outfits.length; el.innerHTML = '';
+  const klar = String(varer.filter((o) => heltKlar(o.taarn, o.tema)).length);
+  if (butikDag !== dag() || el.dataset.ejer !== String(ejerKonto()) || el.dataset.n !== String(gem.outfits.length) || el.dataset.h !== klar) {
+    butikDag = dag(); el.dataset.ejer = ejerKonto(); el.dataset.n = gem.outfits.length; el.dataset.h = klar; el.innerHTML = '';
     for (const o of varer) {
       const t = tema(o.tema), ejer = ejerOutfit(o.id);
       const k = h('button', 'vare glas' + (ejer ? ' ejet' : ''), `<div class="foto" style="--glod:${t.lys || t.k1}55"><img src="${fotograf.foto(o.taarn, o.tema)}" alt="" draggable="false"></div><b>${t.navn}</b><span>${T[o.taarn].navn} · <span class="sj sj-${sjaeldenhed(o.pris)}">${sjaeldenhed(o.pris)}</span></span><div class="pris">${ejer ? 'Ejet' : ikon('gem') + tal(o.pris)}</div>`);
@@ -328,6 +345,7 @@ const saet = (id, v) => { if (vist[id] !== v) { vist[id] = v; $(id).textContent 
 async function startKamp(vs) {
   const baneId = vs ? vs.bane : gem.bane, valgt_ = BANER.find((b) => b.id === baneId) || BANER[0];
   if (valgt_.by) { $('hent').classList.remove('vaek'); $('hentLinje').style.width = '35%'; await hentBy(valgt_.by); $('hentLinje').style.width = '100%'; $('hent').classList.add('vaek'); }      // byerne hentes, når de skal bruges
+  $('hent').classList.remove('vaek'); await hentHelte([...gem.udstyr.map((id) => [id, gem.paa[id] || 'std']), ...(gem.udstyr.includes('kaserne') ? ['enhed', 'jeep', 'apc', 'kampvogn'].map((e) => [e, gem.paa.kaserne || 'std']) : [])]); $('hent').classList.add('vaek');      // de nye helte til de tårne, man har med
   vis('kamp'); if (!se) { se = lavVisning($('rum'), $('lag')); se.naarSnak((h, n, s_) => { if (gem.indst.snak) pludre(h, n, s_); }); }
   g = sim.nytSpil(baneId, gem.udstyr, vs ? 'normal' : gem.svaer); if (vs) g.versus = vs; placerer = null; valgt = null; pause = false; udbetalt = false; fart = 1;
   $('fart').textContent = '1×'; document.body.classList.remove('pauset'); $('slut').hidden = true; $('valgt').hidden = true;

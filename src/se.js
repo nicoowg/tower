@@ -5,7 +5,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TAARNE, FJENDER, FELT, VEJ } from './data.js';
 import { pers, saetning, RAAB, VARIGHED, vaelgHandling, pose } from './sind.js';
 import { tal, DRONEBANE, tagVed, TAGBONUS } from './sim.js';
-import { klaed, klaedOm } from './stof.js';
+import { klaed, klaedOm, klaedHelt } from './stof.js';
 import { tema } from './stil.js';
 import { pynt, pyntSkridt, EFFEKT } from './pynt.js';
 
@@ -25,6 +25,21 @@ export async function hentModeller(fremskridt) {
     M[navn] = g.scene; fremskridt?.(++n / NAVNE.length);
   }));
 }
+
+// De nye helte: én model pr. tårn og outfit (model/helte/spil.py). Hentes, når de skal bruges.
+const heltHent = new Map();
+export const heltNoegle = (id, tema_) => `helt:${id}:${tema_ || 'std'}`;
+export function hentHelt(id, tema_ = 'std') {
+  const k = heltNoegle(id, tema_);
+  if (!heltHent.has(k)) heltHent.set(k, new GLTFLoader().loadAsync(`model/helt/${id}_${tema_}.glb`).then((g) => {
+    g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    klaedHelt(g.scene); M[k] = g.scene; return g.scene;
+  }).catch(() => { M[k] = null; return null; }));
+  return heltHent.get(k);
+}
+export const hentHelte = (par) => Promise.all(par.map(([id, t]) => hentHelt(id, t)));
+export const heltKlar = (id, t) => M[heltNoegle(id, t)] !== undefined;
+const helt = (id, tema_) => M[heltNoegle(id, tema_)] || null;
 
 // Byerne er store, så de hentes først, når man vælger banen.
 export async function hentBy(navn) {
@@ -400,12 +415,13 @@ export function lavVisning(laerred, lag) {
   // ----- figurer -----
   let outfits = {};
   function lavTaarn(t) {
-    const rod = M[t.id].clone(true);
-    klaedOm(rod, tema(outfits[t.id]), t.id);
-    const tm = tema(outfits[t.id]); const temaId = outfits[t.id] || 'std';
+    const temaId = outfits[t.id] || 'std', hm = helt(t.id, temaId);
+    const rod = (hm || M[t.id]).clone(true);
+    if (!hm) klaedOm(rod, tema(outfits[t.id]), t.id);
+    const tm = tema(outfits[t.id]);
     rod.position.set(X(t.x), 0, Z(t.y));
     const v = { rod, drej: rod.getObjectByName('drej'), vaaben: rod.getObjectByName('vaaben'), spin: rod.getObjectByName('spin'), drone: rod.getObjectByName('drone'), munding: rod.getObjectByName('munding'),
-      foedt: tid, trin: -1, prikker: [], op: -9, vinkel: 0, fase: Math.random() * 6, lysFarve: tm.lys ? new THREE.Color(tm.lys).getHex() : null, neon: !!tm.gloed, temaId, effekt: EFFEKT[temaId], tromle: rod.getObjectByName('spin_tromle') };
+      foedt: tid, trin: -1, prikker: [], op: -9, vinkel: 0, fase: Math.random() * 6, helt: !!hm, lysFarve: tm.lys ? new THREE.Color(tm.lys).getHex() : null, neon: !!tm.gloed, temaId, effekt: EFFEKT[temaId], tromle: rod.getObjectByName('spin_tromle') };
     v.hoved = rod.getObjectByName('hoved'); v.sk = rod.getObjectByName('skuldre'); v.benV = rod.getObjectByName('benV'); v.benH = rod.getObjectByName('benH'); v.mand = rod.getObjectByName('mand');
     // hver figur får sit eget tempo og sine egne vaner, så to ens tårne aldrig bevæger sig ens
     Object.assign(v, { puls: 1.2 + Math.random() * 0.9, n1: 0.37 + Math.random() * 0.3, n2: 0.83 + Math.random() * 0.5, stiv: 170 + Math.random() * 110, vf: 0, hv: 0, gest: null, naeste: tid + 1 + Math.random() * 5, rykAmp: 1, rykSide: 0, sidstSkud: -9 });
@@ -421,7 +437,7 @@ export function lavVisning(laerred, lag) {
     verden.add(rod); return v;
   }
   function lavFjende(f) {
-    const rod = M[f.type].clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
+    const rod = (f.model || M[f.type]).clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
     const v = { rod, krop: rod.getObjectByName('krop') || rod, benV: rod.getObjectByName('benV'), benH: rod.getObjectByName('benH'), armV: rod.getObjectByName('armV'), armH: rod.getObjectByName('armH'), vV: rod.getObjectByName('vingeV'), vH: rod.getObjectByName('vingeH'), fase: Math.random() * 6, foedt: tid,
       side: f.d.boss ? 0 : (Math.random() - 0.5) * 2 * Math.max(0, VEJ / 2 - (f.d.r || 8) - 5), takt: 0.85 + Math.random() * 0.3, vugge: 0.03 + Math.random() * 0.06 };      // hver sin plads på vejen og sin egen gang
     v.p = pers(f.type); v.naeste = tid + (f.d.boss ? 1.2 : 2 + Math.random() * 7); v.akt = null;
@@ -502,7 +518,7 @@ export function lavVisning(laerred, lag) {
     if (v.benV) { v.bV0 = v.benV.rotation.x; v.bH0 = v.benH.rotation.x; }
   }
   function anvendTrin(v, t) {
-    v.prikker.forEach((p, i) => { p.visible = i < t.trin; }); visTrin(v.rod, t.trin); vaelgDele(v, t.trin); pynt(v.rod, v.temaId, t.trin);
+    v.prikker.forEach((p, i) => { p.visible = i < t.trin; }); visTrin(v.rod, t.trin); vaelgDele(v, t.trin); if (!v.helt) pynt(v.rod, v.temaId, t.trin);
     v.glorie.material.color.set([0xffffff, 0xffffff, 0xffe9c4, 0xffd27a, 0xffb347][t.trin]);
   }
   const drejMod = (nu, maal, k) => { let d = maal - nu; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return nu + d * k; };
@@ -859,7 +875,7 @@ export function lavVisning(laerred, lag) {
     for (const [nr, v] of taarne) if (!set.has(nr)) { v.rod.removeFromParent(); v.bjaelke?.removeFromParent(); v.kerne?.removeFromParent(); taarne.delete(nr); }
 
     // fjender og egne tropper
-    for (const [liste, kort, lav] of [[g.fjender, fjender, lavFjende], [g.enheder, enheder, (u) => { const v = lavFjende({ type: u.type || 'enhed', d: { str: u.type && u.type !== 'enhed' ? 0.7 : 0.62 } }); klaedOm(v.rod, tema(outfits.kaserne), 'kaserne'); return v; }]]) {
+    for (const [liste, kort, lav] of [[g.fjender, fjender, lavFjende], [g.enheder, enheder, (u) => { const hm = helt(u.type || 'enhed', outfits.kaserne || 'std'); const v = lavFjende({ type: u.type || 'enhed', model: hm, d: { str: u.type && u.type !== 'enhed' ? 0.7 : 0.62 } }); if (!hm) klaedOm(v.rod, tema(outfits.kaserne), 'kaserne'); return v; }]]) {
       set.clear();
       for (const f of liste) {
         set.add(f.nr);
@@ -955,9 +971,10 @@ export function lavVisning(laerred, lag) {
 
 // Et tårn som færdig figur med trin, outfit og pynt, som i spillet. Bruges til kataloget i Form.
 export function figurTil(id, trin = 0, temaId = 'std') {
-  const f = M[id].clone(true); klaedOm(f, tema(temaId), id); visTrin(f, trin);
+  const hm = helt(id, temaId);
+  const f = (hm || M[id]).clone(true); if (!hm) klaedOm(f, tema(temaId), id); visTrin(f, trin);
   if (trin >= 4 && f.getObjectByName('platform5')) f.getObjectByName('drej').position.y += 0.55;
-  pynt(f, temaId, trin); return f;
+  if (!hm) pynt(f, temaId, trin); return f;
 }
 
 // Arsenalets drejeskive: én figur ad gangen, i samme lys som banen.
@@ -972,15 +989,18 @@ export function lavFremviser(laerred) {
   const kant = new THREE.DirectionalLight(0xff4a4a, 1.4); kant.position.set(4, 3, -6); scene.add(kant);
   const gulv = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.45 })); gulv.rotation.x = -Math.PI / 2; gulv.receiveShadow = true; scene.add(gulv);
   const kamera = new THREE.PerspectiveCamera(28, 1, 0.5, 60);
-  let figur = null, spin = null, hoved = null, sk = null, v = 0.6, tid = 0;
+  let figur = null, spin = null, hoved = null, sk = null, v = 0.6, tid = 0, senest = '';
   function vis(id, trin = 0, temaId = 'std') {
-    figur?.removeFromParent(); figur = M[id].clone(true); klaedOm(figur, tema(temaId), id);
+    const hm = helt(id, temaId);
+    if (!hm && M[heltNoegle(id, temaId)] === undefined) hentHelt(id, temaId).then((m) => { if (m && senest === `${id}:${trin}:${temaId}`) vis(id, trin, temaId); });
+    senest = `${id}:${trin}:${temaId}`;
+    figur?.removeFromParent(); figur = (hm || M[id]).clone(true); if (!hm) klaedOm(figur, tema(temaId), id);
     // trin 5 svæver på sin platform
     if (trin >= 4 && figur.getObjectByName('platform5')) figur.getObjectByName('drej').position.y += 0.55;
-    pynt(figur, temaId, trin);
+    if (!hm) pynt(figur, temaId, trin);
     spin = figur.getObjectByName('spin'); hoved = figur.getObjectByName('hoved'); sk = figur.getObjectByName('skuldre'); visTrin(figur, trin); scene.add(figur);
-    const stor = id === 'bjoern' ? 1.25 : 1;
-    kamera.position.set(0, 3.1 * stor, 8.6 * stor); kamera.lookAt(0, 1.25, 0);
+    const stor = (id === 'bjoern' ? 1.25 : 1) * (hm ? 1.12 : 1), op_ = hm && trin >= 4 ? 0.35 : 0;
+    kamera.position.set(0, 3.1 * stor + op_, 8.6 * stor); kamera.lookAt(0, (hm ? 1.45 : 1.25) + op_, 0);
   }
   function tegn(dt) {
     if (!figur) return;
@@ -994,7 +1014,7 @@ export function lavFremviser(laerred) {
   // Et stillbillede af et tårn i et outfit, til butikkens kort
   const fotos = new Map();
   function foto(id, temaId, trin = 4) {
-    const n = `${id}:${temaId}:${trin}`;
+    const n = `${id}:${temaId}:${trin}:${helt(id, temaId) ? 'h' : 'g'}`;
     if (fotos.has(n)) return fotos.get(n);
     const gl = v; vis(id, trin, temaId); v = -0.55; figur.rotation.y = v;
     renderer.setPixelRatio(1); renderer.setSize(360, 360, false); kamera.aspect = 1; kamera.updateProjectionMatrix();

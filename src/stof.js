@@ -104,3 +104,13 @@ export function klaed(navn, rod) {
     }
   });
 }
+
+// De nye helte har stoffet i materialets navn: "jakke|#3d4a3a|twill". [mønster, gentagelser pr. meter, styrke]
+const HELTESTOF = { vaev: ['vaev', 9, 0.4], twill: ['twill', 8, 0.45], strik: ['vaev', 5, 0.5], laeder: ['boerste', 4, 0.25], pels: ['graes', 3, 0.55],
+  camo: ['camo', 1.6, 0.6], kulfiber: ['fiber', 7, 0.5], skael: ['skael', 3, 0.5] };
+export function klaedHelt(rod) {
+  rod.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) { const s = m.name.split('|')[2]; if (HELTESTOF[s]) laeg(m, ...HELTESTOF[s]); }
+  });
+}
