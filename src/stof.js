@@ -37,20 +37,26 @@ const M = {
 const gemt = {};
 const moenster = (n) => (gemt[n] ||= M[n]());
 
-function laeg(m, navn, skala, styrke) {
+function laeg(m, navn, skala, styrke, relief = 0) {
   if (m.userData.stof || m.emissiveIntensity > 0.3 && m.emissive?.getHex()) return;
   m.userData.stof = navn;
   const t = moenster(navn);
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.sT = { value: t }; sh.uniforms.sK = { value: skala }; sh.uniforms.sS = { value: styrke };
+    sh.uniforms.sT = { value: t }; sh.uniforms.sK = { value: skala }; sh.uniforms.sS = { value: styrke }; sh.uniforms.sR = { value: relief };
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 sP; varying vec3 sN;').replace('#include <begin_vertex>', '#include <begin_vertex>\nsP = position; sN = normal;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D sT; uniform float sK; uniform float sS; varying vec3 sP; varying vec3 sN;')
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D sT; uniform float sK; uniform float sS; uniform float sR; varying vec3 sP; varying vec3 sN;')
       .replace('#include <map_fragment>', `#include <map_fragment>
         vec3 sW = pow(abs(normalize(sN)), vec3(6.0)); sW /= (sW.x + sW.y + sW.z);
         float sV = texture2D(sT, sP.zy * sK).r * sW.x + texture2D(sT, sP.xz * sK).r * sW.y + texture2D(sT, sP.xy * sK).r * sW.z;
-        diffuseColor.rgb *= mix(1.0, sV * 2.0, sS);`);
+        diffuseColor.rgb *= mix(1.0, sV * 2.0, sS);`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        if (sR > 0.0) {            // stoffets relief: mønsteret buler overfladen, så vævning og skæl fanger lyset
+          vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition); float dhx = dFdx(sV) * sR, dhy = dFdy(sV) * sR;
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx); float det = dot(dpx, r1);
+          normal = normalize(abs(det) * normal - sign(det) * (dhx * r1 + dhy * r2));
+        }`);
   };
-  m.customProgramCacheKey = () => `stof-${navn}-${skala}-${styrke}`;
+  m.customProgramCacheKey = () => `stof-${navn}-${skala}-${styrke}-${relief}`;
   m.needsUpdate = true;
 }
 
@@ -106,8 +112,8 @@ export function klaed(navn, rod) {
 }
 
 // De nye helte har stoffet i materialets navn: "jakke|#3d4a3a|twill". [mønster, gentagelser pr. meter, styrke]
-const HELTESTOF = { vaev: ['vaev', 9, 0.4], twill: ['twill', 8, 0.45], strik: ['vaev', 5, 0.5], laeder: ['boerste', 4, 0.25], pels: ['graes', 3, 0.55],
-  camo: ['camo', 1.6, 0.6], kulfiber: ['fiber', 7, 0.5], skael: ['skael', 3, 0.5] };
+const HELTESTOF = { vaev: ['vaev', 48, 0.16, 0.25], twill: ['twill', 40, 0.2, 0.3], strik: ['vaev', 26, 0.25, 0.4], laeder: ['boerste', 20, 0.12, 0.15], pels: ['graes', 16, 0.25, 0.4],
+  camo: ['camo', 3.5, 0.4, 0.05], kulfiber: ['fiber', 36, 0.25, 0.25], skael: ['skael', 12, 0.3, 0.4] };
 export function klaedHelt(rod) {
   rod.traverse((o) => {
     if (!o.isMesh) return;
