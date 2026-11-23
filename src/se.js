@@ -38,9 +38,25 @@ export function hentHelt(id, tema_ = 'std') {
   const k = heltNoegle(id, tema_);
   if (!heltHent.has(k)) heltHent.set(k, new GLTFLoader().loadAsync(`model/helt/${id}_${tema_}.glb`).then((g) => {
     g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-    klaedHelt(g.scene); M[k] = g.scene; return g.scene;
+    halsLed(g.scene); klaedHelt(g.scene); M[k] = g.scene; return g.scene;
   }).catch(() => { M[k] = null; return null; }));
   return heltHent.get(k);
+}
+// Heltenes 'hoved' ligger ved fødderne i modellen, så hovedet svingede rundt om fødderne.
+// Her flyttes leddet op i halsen (lige over hagen), og delene flyttes tilsvarende tilbage.
+function halsLed(rod) {
+  rod.updateMatrixWorld(true);
+  const ledd = [];
+  rod.traverse((o) => { if (/^hoved/.test(o.name) && !o.isMesh && o.position.lengthSq() < 1e-6) ledd.push(o); });
+  for (const h of ledd) {
+    const box = new THREE.Box3();
+    h.traverse((o) => { if (o.isMesh) box.expandByObject(o); });
+    if (box.isEmpty()) continue;
+    const inv = h.matrixWorld.clone().invert(), lo = box.min.clone().applyMatrix4(inv), hi = box.max.clone().applyMatrix4(inv);
+    const p = new THREE.Vector3((lo.x + hi.x) / 2, Math.min(lo.y, hi.y) + Math.abs(hi.y - lo.y) * 0.15, (lo.z + hi.z) / 2);
+    for (const c of h.children) c.position.sub(p);
+    h.position.add(p);
+  }
 }
 export const hentHelte = (par) => Promise.all(par.map(([id, t]) => hentHelt(id, t)));
 export const heltKlar = (id, t) => M[heltNoegle(id, t)] !== undefined;

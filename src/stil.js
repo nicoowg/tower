@@ -41,7 +41,7 @@ export function tidTilNyButik(nu = new Date()) {
 
 // ---------- ejerkonto ----------
 // Kun navnet "Nico" kræver adgangskode. Adgangskoden ligger ikke her, kun et saltet aftryk af den.
-const SALT = 'd9075d8c5484bcad875b9a3b242e75a3', AFTRYK = '4d5c01b5110b4026d19b8d531195c07159ee584d51ae56484e41d28cb365e985';
+const SALT = '0c0fc56889081acba8410a6c82d704ca', AFTRYK = '7c38034ea86205b17c58e0dc77d4151ea075364f35ec481733e516b6691f6724';
 export const ejerNavn = (navn) => navn.trim().toLowerCase() === 'nico';
 export async function tjekEjer(kode) {
   const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
