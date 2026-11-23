@@ -985,7 +985,7 @@ export function figurTil(id, trin = 0, temaId = 'std') {
 }
 
 // Arsenalets drejeskive: én figur ad gangen, i samme lys som banen.
-export function lavFremviser(laerred) {
+export function lavFremviser(laerred, valg = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas: laerred, antialias: true, alpha: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -996,7 +996,8 @@ export function lavFremviser(laerred) {
   const kant = new THREE.DirectionalLight(0xff4a4a, 1.4); kant.position.set(4, 3, -6); scene.add(kant);
   const gulv = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.45 })); gulv.rotation.x = -Math.PI / 2; gulv.receiveShadow = true; scene.add(gulv);
   const kamera = new THREE.PerspectiveCamera(28, 1, 0.5, 60);
-  let figur = null, spin = null, hoved = null, sk = null, v = -0.55, maalV = -0.55, tid = 0, senest = '', traek = null;
+  let figur = null, spin = null, hoved = null, sk = null, v = -0.55, maalV = -0.55, tid = 0, senest = '', traek = null, vaaben_ = null, vaabenHvil = 0, hilsT = -9, mus = { x: 0, y: 0 }, blik = 0, naesteBlik = 0, tjek = -9;
+  addEventListener('pointermove', (e) => { const r = laerred.getBoundingClientRect(); if (r.width) mus = { x: Math.max(-1.5, Math.min(1.5, (e.clientX - (r.left + r.width / 2)) / r.width * 2)), y: Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height * 0.3)) / r.height * 2)) }; });
   laerred.addEventListener('pointerdown', (e) => { traek = { x: e.clientX, v }; laerred.setPointerCapture?.(e.pointerId); });
   laerred.addEventListener('pointermove', (e) => { if (traek) { v = traek.v + (e.clientX - traek.x) * 0.012; maalV = v; } });
   addEventListener('pointerup', () => { traek = null; });
@@ -1008,21 +1009,40 @@ export function lavFremviser(laerred) {
     // trin 5 svæver på sin platform
     if (trin >= 4 && figur.getObjectByName('platform5')) figur.getObjectByName('drej').position.y += 0.55;
     if (!hm) pynt(figur, temaId, trin);
+    if (valg.udenSokkel) figur.traverse((o) => { if (/^(fod_net|sokkel|platform5|op4\.001)/.test(o.name)) o.visible = false; });      // forsiden: kun personen, ingen plade
+    vaaben_ = figur.getObjectByName('vaaben'); if (vaaben_) vaabenHvil = vaaben_.rotation.x;
     spin = figur.getObjectByName('spin'); hoved = figur.getObjectByName('hoved'); sk = figur.getObjectByName('skuldre'); visTrin(figur, trin); scene.add(figur);
     const stor = (id === 'bjoern' ? 1.25 : 1) * (hm ? 1.12 : 1), op_ = hm && trin >= 4 ? 0.35 : 0;
-    kamera.position.set(0, 3.1 * stor + op_, 8.6 * stor); kamera.lookAt(0, (hm ? 1.45 : 1.25) + op_, 0);
+    if (valg.udenSokkel) { kamera.position.set(0, 2.6, 6.6); kamera.lookAt(0, 1.55, 0); maalV = -0.22; }        // forsiden: tættere på, og figuren vender sig næsten mod en
+    else { kamera.position.set(0, 3.1 * stor + op_, 8.6 * stor); kamera.lookAt(0, (hm ? 1.45 : 1.25) + op_, 0); }
   }
   function tegn(dt) {
     if (!figur) return;
     const b = laerred.clientWidth, h = laerred.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (laerred.width !== Math.round(b * dpr) || laerred.height !== Math.round(h * dpr)) { renderer.setPixelRatio(dpr); renderer.setSize(b, h, false); kamera.aspect = b / h; kamera.updateProjectionMatrix(); }
-    // figuren står og lever: vugger let, trækker vejret, kigger sig om. Træk med musen for at dreje den selv.
-    tid += dt; if (!traek) v += (maalV - v) * Math.min(1, dt * 3);
-    const vug = Math.sin(tid * 0.45) * 0.22 + Math.sin(tid * 0.17) * 0.12;
-    figur.rotation.y = v + (traek ? 0 : vug); spin?.rotateY(dt * 1.2); pyntSkridt(figur, tid);
+    // figuren lever: når man kommer ind, vender den sig mod en, sænker våbnet og nikker. Bagefter følger den musen med blikket,
+    // skifter vægt, trækker vejret, kigger væk en gang imellem og ser til våbnet. Træk med musen for at dreje den selv.
+    tid += dt;
+    const hq = tid - hilsT, glat = (q) => q * q * (3 - 2 * q);
+    let krop = maalV + Math.sin(tid * 0.31) * 0.06, nik = 0, vaabenNed = 0;
+    if (hq >= 0 && hq < 3.2) {
+      const vend = glat(Math.min(1, hq / 1.1));
+      krop = -1.25 + (maalV + 1.25) * vend;
+      vaabenNed = Math.sin(Math.PI * Math.min(1, Math.max(0, (hq - 0.6) / 2.2))) * 0.12;
+      nik = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (hq - 1.3) / 0.7)))) * 0.28 + Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (hq - 2.0) / 0.5)))) * 0.14;
+    }
+    if (tid > naesteBlik) { naesteBlik = tid + 3 + Math.random() * 5; blik = Math.random() < 0.35 ? (Math.random() - 0.5) * 1.6 : 0; if (Math.random() < 0.25) tjek = tid; }
+    const tq = (tid - tjek) / 1.6; if (tq > 0 && tq < 1) vaabenNed += Math.sin(Math.PI * tq) * 0.08;          // ser til våbnet
+    if (!traek) v += (krop - v) * Math.min(1, dt * 4);
+    figur.rotation.y = v; spin?.rotateY(dt * 1.2); pyntSkridt(figur, tid);
     figur.scale.y = 1 + Math.sin(tid * 1.9) * 0.006;                 // vejrtrækning
-    const drej_ = figur.getObjectByName('drej'); if (drej_) drej_.rotation.z = Math.sin(tid * 0.8) * 0.02;
-    if (hoved) { const kig = Math.sin(tid * 0.6) * 0.5 + (Math.sin(tid * 0.13) > 0.7 ? 0.35 : 0); hoved.rotation.y += (kig - hoved.rotation.y) * Math.min(1, dt * 2.5); hoved.rotation.x = Math.sin(tid * 0.9) * 0.05; }
+    const drej_ = figur.getObjectByName('drej'); if (drej_) drej_.rotation.z = Math.sin(tid * 0.42) * 0.025;     // vægten skifter fra ben til ben
+    if (hoved) {
+      const kig = (blik || -mus.x * 0.55) - (v - maalV) * 0.6;            // kigger på musen (eller væk et øjeblik)
+      hoved.rotation.y += (kig - hoved.rotation.y) * Math.min(1, dt * 3);
+      hoved.rotation.x += ((mus.y * 0.18) + nik - hoved.rotation.x) * Math.min(1, dt * 6);
+    }
+    if (vaaben_) vaaben_.rotation.x = vaabenHvil + vaabenNed;
     if (sk) sk.rotation.x = Math.sin(tid * 1.7) * 0.05;
     renderer.render(scene, kamera);
   }
@@ -1036,5 +1056,5 @@ export function lavFremviser(laerred) {
     renderer.render(scene, kamera); const url = laerred.toDataURL('image/png'); fotos.set(n, url); v = gl;
     laerred.width = 0; return url;
   }
-  return { vis, tegn, foto };
+  return { vis, tegn, foto, hils: () => { hilsT = tid; v = -1.25; } };
 }

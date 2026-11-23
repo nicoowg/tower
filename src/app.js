@@ -56,7 +56,7 @@ const billede = (id) => `<img src="billeder/${id}.jpg" alt="" draggable="false">
 
 // ---------- forsiden: seks sider ved siden af hinanden ----------
 const SIDER = ['start', 'spil', 'online', 'arsenal', 'garderobe', 'butik', 'indstillinger'];
-let nr = 0, fremviser = null, fremviser2 = null, fremviser3 = null, fotograf = null;
+let sidsteSide = '', nr = 0, fremviser = null, fremviser2 = null, fremviser3 = null, fotograf = null;
 function gaaTil(n, lydløs) {
   nr = Math.max(0, Math.min(SIDER.length - 1, n));
   $('spor').style.transform = `translateX(${-nr * 100}%)`;
@@ -66,6 +66,8 @@ function gaaTil(n, lydløs) {
   m.style.width = kn.offsetWidth + 'px'; m.style.transform = `translateX(${kn.offsetLeft - 4}px)`;
   $('prikker').innerHTML = SIDER.map((_, i) => `<i class="${i === nr ? 'paa' : ''}"></i>`).join('');
   if (!lydløs) lyd('klik');
+  if (SIDER[nr] === 'start' && fremviser3 && sidsteSide !== 'start') fremviser3.hils();        // figuren hilser, hver gang man kommer til forsiden
+  sidsteSide = SIDER[nr];
   tegnSide();
 }
 // De nye helte hentes, før en side viser dem; siden tegnes igen, når de er kommet.
@@ -112,11 +114,11 @@ addEventListener('resize', () => { if (side === 'hub') gaaTil(nr, true); });
 // ---------- Start ----------
 let startFigur = null;
 function startSide() {
-  fremviser3 ||= lavFremviser($('skive3'));
+  if (!fremviser3) { fremviser3 = lavFremviser($('skive3'), { udenSokkel: true }); setTimeout(() => fremviser3.hils(), 400); }
   fotograf ||= lavFremviser(document.createElement('canvas'));
   const ejede = TAARNE.filter((d) => ejerTaarn(d.id));
   if (!startFigur) { const d = ejede[Math.random() * ejede.length | 0] || TAARNE[0]; startFigur = d.id; }
-  fremviser3.vis(startFigur, 4, gem.paa[startFigur]);
+  if (fremviser3.vist !== startFigur + (gem.paa[startFigur] || '')) { fremviser3.vist = startFigur + (gem.paa[startFigur] || ''); fremviser3.vis(startFigur, 3, gem.paa[startFigur]); }
   if (!aabenId(gem.bane)) { gem.bane = BANER[0].id; husk(); }
   const b = BANER.find((x) => x.id === gem.bane);
   $('sHilsen').textContent = gem.navn ? `Velkommen tilbage, ${gem.navn}` : '';
