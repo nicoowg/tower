@@ -6,6 +6,7 @@ import { TAARNE, FJENDER, FELT, VEJ } from './data.js';
 import { tal, DRONEBANE, tagVed, TAGBONUS } from './sim.js';
 import { klaed, klaedOm } from './stof.js';
 import { tema } from './stil.js';
+import { pynt, pyntSkridt, EFFEKT } from './pynt.js';
 
 const K = 0.05;                                   // banens enheder -> meter i rummet
 const FIG = 1.3;                                  // figurerne er lidt større end deres plads på banen, så de kan ses
@@ -83,12 +84,14 @@ function grundBillede(bane) {
   if (oe) {                                     // øen: græs, sten og sø. Alt uden for kysten er gennemsigtigt
     k.clearRect(-m / K, -m / K, c.width / s, c.height / s);
     k.save(); flade(bane.land); k.clip();
-    f = k.createRadialGradient(760, 430, 60, 760, 430, 900); f.addColorStop(0, '#234a2c'); f.addColorStop(1, '#16301e'); k.fillStyle = f; k.fillRect(0, 0, FELT.b, FELT.h);
+    const OG = { miami: ['#4f9a56', '#3a7a44', '#e8d2a6'], lagune: ['#1d4a2c', '#12301d', '#bfa77e'] }[bane.oeTema] || ['#234a2c', '#16301e', null];
+    f = k.createRadialGradient(760, 430, 60, 760, 430, 900); f.addColorStop(0, OG[0]); f.addColorStop(1, OG[1]); k.fillStyle = f; k.fillRect(0, 0, FELT.b, FELT.h);
     let fr = 7; const tf = () => (fr = (fr * 16807) % 2147483647) / 2147483647;
     for (let i = 0; i < 520; i++) { k.fillStyle = tf() < 0.5 ? 'rgba(10,26,14,.16)' : 'rgba(120,170,96,.07)'; k.beginPath(); k.ellipse(tf() * FELT.b, tf() * FELT.h, 8 + tf() * 34, 5 + tf() * 18, tf() * 3, 0, 7); k.fill(); }
     for (let i = 0; i < 260; i++) { k.fillStyle = 'rgba(70,74,78,.5)'; k.beginPath(); k.ellipse(tf() * FELT.b, tf() * FELT.h, 1.5 + tf() * 4, 1 + tf() * 3, tf() * 3, 0, 7); k.fill(); }
-    k.lineWidth = 14; k.strokeStyle = 'rgba(8,16,10,.5)'; flade(bane.land); k.stroke();
-    for (const p of bane.vand) { flade(p); k.fillStyle = '#0d2733'; k.fill(); k.lineWidth = 3; k.strokeStyle = 'rgba(190,225,240,.3)'; k.stroke(); }
+    if (OG[2]) { k.lineWidth = 90; k.strokeStyle = OG[2]; flade(bane.land); k.stroke(); k.lineWidth = 26; k.strokeStyle = 'rgba(0,0,0,.12)'; k.stroke(); }      // sandstrand langs kysten
+    else { k.lineWidth = 14; k.strokeStyle = 'rgba(8,16,10,.5)'; flade(bane.land); k.stroke(); }
+    for (const p of bane.vand) { flade(p); k.fillStyle = { miami: '#3fc8d8', lagune: '#0c4a58' }[bane.oeTema] || '#0d2733'; k.fill(); k.lineWidth = 3; k.strokeStyle = 'rgba(190,225,240,.3)'; k.stroke(); }
     k.restore();
     for (const p of bane.bro) { flade(p); k.fillStyle = '#4a3320'; k.fill(); }
   } else if (bane.vand) {
@@ -227,13 +230,19 @@ export function lavVisning(laerred, lag) {
   }
   const skumring = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 256; const k = c.getContext('2d'), f = k.createLinearGradient(0, 0, 0, 256); f.addColorStop(0, '#0a1422'); f.addColorStop(0.5, '#1c3346'); f.addColorStop(0.8, '#3d5f76'); f.addColorStop(1, '#6f8ea0'); k.fillStyle = f; k.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
   let faar = [], fugle = [], taager = [], naesteSkum = 0;
-  const HAVDYB = 3.2;
+  let HAVDYB = 3.2;
+  const OEHIMMEL = {
+    miami: { h: himmelAf([[0, '#2a1b4a'], [0.45, '#7a3a6a'], [0.75, '#ff7a5a'], [1, '#ffc27a']]), taage: 0xd88a8a, hav: 0x1aa5b8, sol: 0xffc08a, solI: 2.8, himI: 0.9 },
+    lagune: { h: himmelAf([[0, '#02040c'], [0.6, '#061428'], [1, '#0e2a40']]), taage: 0x061a26, hav: 0x041820, sol: 0x9fb6ff, solI: 1.1, himI: 0.45 },
+  };
   function oeOp() {                            // Færøerne i skumringen: hav hele vejen rundt, får, fugle, vandfald og tåge
-    scene.background = skumring; scene.fog = new THREE.Fog(0x2a4356, 100, 330);
-    sol.color.set(0xffe0bb); sol.intensity = 2.5; himmellys.intensity = 0.75; himmellys.color.set(0x9fc0dc); scene.environmentIntensity = 0.5;
+    const OH = OEHIMMEL[g.bane.oeTema]; HAVDYB = g.bane.havdyb || 3.2;
+    scene.background = OH ? OH.h : skumring; scene.fog = new THREE.Fog(OH ? OH.taage : 0x2a4356, 100, 330);
+    sol.color.set(OH ? OH.sol : 0xffe0bb); sol.intensity = OH ? OH.solI : 2.5; himmellys.intensity = OH ? OH.himI : 0.75; himmellys.color.set(0x9fc0dc); scene.environmentIntensity = 0.5;
+    if (g.bane.oeTema === 'lagune') vejrOp('tech');      // lysende plankton, der stiger op i natten
     skygge.visible = false;
-    by.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; if (/^(Fjerne|Sk)/.test(o.name)) o.castShadow = false; } });
-    const hav_ = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshBasicMaterial({ color: 0x0c2531 })); hav_.rotation.x = -Math.PI / 2; hav_.position.y = -HAVDYB; scene.add(hav_); natTing.push(hav_);
+    by.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; if (/^(Fjerne|Sk)/.test(o.name)) o.castShadow = false; if ([].concat(o.material).some((m) => m.name === 'straale')) o.material = new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });} });      // fyrets stråle er svag og lysende, ikke en fast kegle
+    const hav_ = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshBasicMaterial({ color: OH ? OH.hav : 0x0c2531 })); hav_.rotation.x = -Math.PI / 2; hav_.position.y = -HAVDYB; scene.add(hav_); natTing.push(hav_);
     const form = new THREE.Shape(g.bane.land.map(([x, y]) => new THREE.Vector2(X(x), -Z(y))));          // skygger kun på selve øen
     const sk = new THREE.Mesh(new THREE.ShapeGeometry(form), new THREE.ShadowMaterial({ opacity: 0.5 })); sk.rotation.x = -Math.PI / 2; sk.position.y = 0.012; sk.receiveShadow = true; scene.add(sk); natTing.push(sk);
     const uld = new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 1 }), moerkt = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.8 });
@@ -249,7 +258,7 @@ export function lavVisning(laerred, lag) {
       v1.geometry = vinge; v1.position.x = -0.17; v2.position.x = 0.17; const a1 = new THREE.Group(), a2 = new THREE.Group(); a1.add(v1); a2.add(v2); o.add(a1, a2); scene.add(o);
       fugle.push({ o, a1, a2, x: midt[0], y: midt[1], r: 40 + Math.random() * 90, h: 3 + Math.random() * 7, fart: (0.25 + Math.random() * 0.3) * (Math.random() < 0.5 ? -1 : 1), fase: Math.random() * 6 });
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 0; i++) {      // tågebanker er slået fra: de lagde sig over øen og gjorde den blå
       const o = new THREE.Mesh(kugleG, new THREE.MeshBasicMaterial({ color: 0xa9c0cf, transparent: true, opacity: 0.02, depthWrite: false })); o.scale.set(16 + Math.random() * 12, 1.2 + Math.random(), 8 + Math.random() * 6);
       o.position.set(-60 + Math.random() * 120, 1.5 + Math.random() * 4, -30 + Math.random() * 60); o.fart = 0.4 + Math.random() * 0.6; scene.add(o); taager.push(o);
     }
@@ -270,9 +279,9 @@ export function lavVisning(laerred, lag) {
       f.a1.rotation.z = slag; f.a2.rotation.z = -slag;
     }
     for (const o of taager) { o.position.x += o.fart * dt; if (o.position.x > 75) o.position.x = -75; }
-    const fald = g.bane.fald;                 // vandfaldet ud over klippen
-    for (let i = 0; i < 2; i++) { a.set(X(fald[0] + (Math.random() - 0.5) * 16), 0, Z(fald[1])); gnist(a, (Math.random() - 0.5) * 0.3, -1.5 - Math.random(), 0.9 + Math.random() * 0.5, 1.0, 0xd8ecf6, 0.14, 0.3, 0.35); }
-    if (Math.random() < dt * 14) { a.set(X(fald[0] + (Math.random() - 0.5) * 30), -HAVDYB + 0.1, Z(fald[1] + 22)); gnist(a, (Math.random() - 0.5), 0.5, (Math.random() - 0.5), 1.4, 0xd8ecf6, 0.3, 1.2, 0.12); }
+    const fald = g.bane.fald || [-9999, -9999];                 // vandfaldet ud over klippen (kun Færøerne)
+    if (g.bane.fald) for (let i = 0; i < 2; i++) { a.set(X(fald[0] + (Math.random() - 0.5) * 16), 0, Z(fald[1])); gnist(a, (Math.random() - 0.5) * 0.3, -1.5 - Math.random(), 0.9 + Math.random() * 0.5, 1.0, 0xd8ecf6, 0.14, 0.3, 0.35); }
+    if (g.bane.fald && Math.random() < dt * 14) { a.set(X(fald[0] + (Math.random() - 0.5) * 30), -HAVDYB + 0.1, Z(fald[1] + 22)); gnist(a, (Math.random() - 0.5), 0.5, (Math.random() - 0.5), 1.4, 0xd8ecf6, 0.3, 1.2, 0.12); }
     if (tid > naesteSkum) {                    // brænding langs kysten og lys på havet
       naesteSkum = tid + 0.05;
       const L = g.bane.land, i = Math.random() * L.length | 0, p = L[i], q = L[(i + 1) % L.length], t = Math.random(), ud = 1.085 + Math.random() * 0.03;
@@ -324,7 +333,7 @@ export function lavVisning(laerred, lag) {
   const nyRing = pulje(24, () => { const r = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 64), lys(0xffffff)); r.rotation.x = -Math.PI / 2; return r; });
   const nyLyn = pulje(10, () => { const l = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(80 * 3), 3)), new THREE.LineBasicMaterial({ color: 0xcfeeff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); l.frustumCulled = false; return l; });
   const aktive = new Set();
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), d_ = new THREE.Vector3();
 
   function gnist(p, vx, vy, vz, liv, farve, s0, s1, op = 0.9) {
     const o = nyGnist(); o.position.copy(p); o.v = [vx, vy, vz]; o.liv = o.max = liv; o.s = [s0, s1]; o.op = op;
@@ -353,10 +362,10 @@ export function lavVisning(laerred, lag) {
   function lavTaarn(t) {
     const rod = M[t.id].clone(true);
     klaedOm(rod, tema(outfits[t.id]), t.id);
-    const tm = tema(outfits[t.id]);
+    const tm = tema(outfits[t.id]); const temaId = outfits[t.id] || 'std';
     rod.position.set(X(t.x), 0, Z(t.y));
     const v = { rod, drej: rod.getObjectByName('drej'), vaaben: rod.getObjectByName('vaaben'), spin: rod.getObjectByName('spin'), drone: rod.getObjectByName('drone'), munding: rod.getObjectByName('munding'),
-      foedt: tid, trin: -1, prikker: [], op: -9, vinkel: 0, fase: Math.random() * 6, lysFarve: tm.lys ? new THREE.Color(tm.lys).getHex() : null, neon: !!tm.gloed, tromle: rod.getObjectByName('spin_tromle') };
+      foedt: tid, trin: -1, prikker: [], op: -9, vinkel: 0, fase: Math.random() * 6, lysFarve: tm.lys ? new THREE.Color(tm.lys).getHex() : null, neon: !!tm.gloed, temaId, effekt: EFFEKT[temaId], tromle: rod.getObjectByName('spin_tromle') };
     v.hoved = rod.getObjectByName('hoved'); v.sk = rod.getObjectByName('skuldre'); v.benV = rod.getObjectByName('benV'); v.benH = rod.getObjectByName('benH'); v.mand = rod.getObjectByName('mand');
     // hver figur får sit eget tempo og sine egne vaner, så to ens tårne aldrig bevæger sig ens
     Object.assign(v, { puls: 1.2 + Math.random() * 0.9, n1: 0.37 + Math.random() * 0.3, n2: 0.83 + Math.random() * 0.5, stiv: 170 + Math.random() * 110, vf: 0, hv: 0, gest: null, naeste: tid + 1 + Math.random() * 5, rykAmp: 1, rykSide: 0, sidstSkud: -9 });
@@ -386,7 +395,7 @@ export function lavVisning(laerred, lag) {
     if (v.benV) { v.bV0 = v.benV.rotation.x; v.bH0 = v.benH.rotation.x; }
   }
   function anvendTrin(v, t) {
-    v.prikker.forEach((p, i) => { p.visible = i < t.trin; }); visTrin(v.rod, t.trin); vaelgDele(v, t.trin);
+    v.prikker.forEach((p, i) => { p.visible = i < t.trin; }); visTrin(v.rod, t.trin); vaelgDele(v, t.trin); pynt(v.rod, v.temaId, t.trin);
     v.glorie.material.color.set([0xffffff, 0xffffff, 0xffe9c4, 0xffd27a, 0xffb347][t.trin]);
   }
   const drejMod = (nu, maal, k) => { let d = maal - nu; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return nu + d * k; };
@@ -402,6 +411,10 @@ export function lavVisning(laerred, lag) {
       const fv = v.lysFarve ?? ([0xfff1d0, 0xfff1d0, 0xffe9b8, 0xffd27a, 0xffb347][v.trin] ?? 0xfff1d0), tyk = (e.id === 'skytte' ? 0.07 : 0.045) * (1 + v.trin * 0.16) * (v.neon ? 1.6 : 1);
       streg(a, b, tyk, fv, e.id === 'skytte' ? 0.14 : 0.06 + v.trin * 0.008);
       if (v.lysFarve != null) { streg(a, b, tyk * 3.2, fv, 0.09, 0.28); gnist(b, 0, 1.5, 0, 0.22, fv, 0.25, 0.04, 0.9); }      // outfittets lys gløder i skuddet
+      const kryds = 0.22 + v.trin * 0.05;       // et lille lyskryds, hvor skuddet rammer
+      c.set(b.x - kryds, b.y, b.z); d_.set(b.x + kryds, b.y, b.z); streg(c, d_, 0.03, fv, 0.08, 0.9);
+      c.set(b.x, b.y - kryds, b.z); d_.set(b.x, b.y + kryds, b.z); streg(c, d_, 0.03, fv, 0.08, 0.9);
+      if (v.trin >= 2 && Math.random() < 0.35) { const t_ = g.taarne.find((x) => x.nr === e.t); if (t_) ringFx(t_.x, t_.y, 22 + v.trin * 4, v.lysFarve ?? 0x5ce0ff, 0.35, 0.45); }
       gnist(a, 0, 0, 0, 0.06, v.lysFarve ?? 0xffd9a0, 0.22 * (v.neon ? 1.6 : 1), 0.05);
       gnist(b, 0, 2, 0, 0.12, 0xffffff, 0.1, 0.02);
     } else if (e.a === 'hagl' && v) {
@@ -702,6 +715,17 @@ export function lavVisning(laerred, lag) {
       }
       if (v.hoved) { v.hv += ((ledig ? uro * 0.2 + (ga === 'kig' ? ge * 0.95 : 0) : 0) - v.hv) * Math.min(1, dt * 5); v.hoved.rotation.y = v.hv; }
       if (v.tromle) v.tromle.rotation.y += dt * (siden < 0.35 ? 26 : 1.5);
+      if (v.temaId !== 'std') pyntSkridt(v.rod, tid);
+      const ef = v.effekt;                       // outfittets synlige effekt; flere gnister jo højere trin
+      if (ef && Math.random() < dt * ef.n * (0.5 + t.trin * 0.25)) {
+        const w = Math.random() * 6.28, r = 0.4 + Math.random() * 0.6, px = v.rod.position.x + Math.cos(w) * r, pz = v.rod.position.z + Math.sin(w) * r, py = v.rod.position.y + 0.3 + Math.random() * 2;
+        a.set(px, py, pz);
+        if (ef.slags === 'op') gnist(a, 0, 1.2 + Math.random(), 0, 0.9, Math.random() < 0.5 ? ef.farve : ef.farve2, 0.05, 0.01, 0.95);
+        else if (ef.slags === 'aura') { gnist(a, 0, 0.8, 0, 1.1, Math.random() < 0.6 ? ef.farve : ef.farve2, 0.07, 0.01, 1); if (Math.random() < 0.08) ringFx(t.x, t.y, 34, ef.farve, 0.9, 0.5); }
+        else if (ef.slags === 'blade') gnist(a, (Math.random() - 0.5) * 0.8, -0.3, (Math.random() - 0.5) * 0.8, 1.4, ef.farve, 0.07, 0.05, 0.9);
+        else if (ef.slags === 'ned') gnist(a, 0, -0.5, 0, 1.2, ef.farve, 0.05, 0.02, 0.7);
+        else gnist(a, 0, 0, 0, 0.25, ef.farve, 0.02, 0.12, 0.9);
+      }
       if (v.mech && v.benV) { const gang = Math.min(0.45, Math.abs(v.vf) * 0.09); v.benV.rotation.x = v.bV0 + Math.sin(tid * 10) * gang; v.benH.rotation.x = v.bH0 - Math.sin(tid * 10) * gang; v.rod.position.y += Math.abs(Math.sin(tid * 10)) * gang * 0.12; }
       else if (v.benV) { v.benV.rotation.x = v.bV0 - hop * 0.7 - (ga === 'fod' ? Math.abs(ge * Math.sin(tid * 9)) * 0.4 : 0); v.benH.rotation.x = v.bH0 + hop * 0.5; }
       if (v.mand) v.mand.position.y = -Math.max(0, 1 - siden / 0.3) * 0.16;
@@ -795,7 +819,14 @@ export function lavVisning(laerred, lag) {
     k2.globalAlpha = 1;
   }
 
-  return { saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, saetDiorama: (v) => { diorama = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
+  return { scene_: scene, saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, saetDiorama: (v) => { diorama = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
+}
+
+// Et tårn som færdig figur med trin, outfit og pynt, som i spillet. Bruges til kataloget i Form.
+export function figurTil(id, trin = 0, temaId = 'std') {
+  const f = M[id].clone(true); klaedOm(f, tema(temaId), id); visTrin(f, trin);
+  if (trin >= 4 && f.getObjectByName('platform5')) f.getObjectByName('drej').position.y += 0.55;
+  pynt(f, temaId, trin); return f;
 }
 
 // Arsenalets drejeskive: én figur ad gangen, i samme lys som banen.
@@ -812,7 +843,11 @@ export function lavFremviser(laerred) {
   const kamera = new THREE.PerspectiveCamera(28, 1, 0.5, 60);
   let figur = null, spin = null, hoved = null, sk = null, v = 0.6, tid = 0;
   function vis(id, trin = 0, temaId = 'std') {
-    figur?.removeFromParent(); figur = M[id].clone(true); klaedOm(figur, tema(temaId), id); spin = figur.getObjectByName('spin'); hoved = figur.getObjectByName('hoved'); sk = figur.getObjectByName('skuldre'); visTrin(figur, trin); scene.add(figur);
+    figur?.removeFromParent(); figur = M[id].clone(true); klaedOm(figur, tema(temaId), id);
+    // trin 5 svæver på sin platform
+    if (trin >= 4 && figur.getObjectByName('platform5')) figur.getObjectByName('drej').position.y += 0.55;
+    pynt(figur, temaId, trin);
+    spin = figur.getObjectByName('spin'); hoved = figur.getObjectByName('hoved'); sk = figur.getObjectByName('skuldre'); visTrin(figur, trin); scene.add(figur);
     const stor = id === 'bjoern' ? 1.25 : 1;
     kamera.position.set(0, 3.1 * stor, 8.6 * stor); kamera.lookAt(0, 1.25, 0);
   }
@@ -820,7 +855,7 @@ export function lavFremviser(laerred) {
     if (!figur) return;
     const b = laerred.clientWidth, h = laerred.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (laerred.width !== Math.round(b * dpr) || laerred.height !== Math.round(h * dpr)) { renderer.setPixelRatio(dpr); renderer.setSize(b, h, false); kamera.aspect = b / h; kamera.updateProjectionMatrix(); }
-    v += dt * 0.5; tid += dt; figur.rotation.y = v; spin?.rotateY(dt * 1.2);
+    v += dt * 0.5; tid += dt; figur.rotation.y = v; spin?.rotateY(dt * 1.2); pyntSkridt(figur, tid);
     if (hoved) hoved.rotation.y = Math.sin(tid * 0.9) * 0.45;
     if (sk) sk.rotation.x = Math.sin(tid * 1.7) * 0.05;
     renderer.render(scene, kamera);

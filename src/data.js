@@ -3,6 +3,8 @@ import tokyo from './by_tokyo.js';
 import nordlys from './by_nordlys.js';
 import neon from './by_neon.js';
 import faero from './by_faero.js';
+import miami from './by_miami.js';
+import lagune from './by_lagune.js';
 
 // Alt, der kan justeres uden at røre reglerne: tårne, fjender, bølger og baner.
 // Mål er i banens egne enheder: banen er 1600 x 900.
@@ -109,5 +111,7 @@ export const BANER = [
   { id: 'tokyo', navn: 'Tokyo', punkter: tokyo.vej, by: 'by_tokyo', ...tokyo },
   { id: 'nordlys', navn: 'Nordlys', punkter: nordlys.vej, by: 'by_nordlys', ...nordlys },
   { id: 'neon', navn: 'Neon', punkter: neon.vej, by: 'by_neon', ...neon },
+  { id: 'miami', navn: 'Miami', punkter: miami.vej, by: 'by_miami', ...miami },          // tropiske øer: model/tropeplan.py og model/trope.py
+  { id: 'lagune', navn: 'Månelagunen', punkter: lagune.vej, by: 'by_lagune', ...lagune },
   { id: 'faero', navn: 'Færøerne', punkter: faero.vej, by: 'by_faero', ...faero },          // en ø: planen laves af model/faero_plan.py, øen bygges af model/oe.py
 ];

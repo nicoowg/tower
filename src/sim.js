@@ -13,6 +13,13 @@ export function tagVed(bane, x, y) { for (const [x0, y0, x1, y1, h] of bane.tage
 export const LUFT = new Set(['skud', 'drone', 'vogn', 'lyn', 'skinne', 'straale']);
 export const DRONEBANE = 70;
 const hpFaktor = (w) => Math.pow(1.07, w - 1);
+// Sværhedsgraderne: hvor mange bølger, hvor stærke fjenderne er, og hvad man starter med. Et spil tager cirka 15-30 minutter.
+export const SVAER = {
+  let: { navn: 'Let', boelger: 20, hp: 0.6, penge: 1000, liv: 200, moenter: 0.7 },
+  normal: { navn: 'Normal', boelger: 30, hp: 1, penge: 700, liv: 100, moenter: 1 },
+  svaer: { navn: 'Svær', boelger: 30, hp: 1.3, penge: 600, liv: 75, moenter: 1.4 },
+  mareridt: { navn: 'Mareridt', boelger: 30, hp: 1.7, penge: 500, liv: 50, moenter: 2 },
+};
 const dusoerFaktor = (w) => 1 + 0.045 * (w - 1);
 
 // ---------- banen ----------
@@ -64,8 +71,9 @@ export function tilVej(bane, x, y) {
 }
 
 // ---------- nyt spil ----------
-export function nytSpil(baneId, udstyr) {
-  return { bane: lavBane(baneId), udstyr: [...udstyr], penge: START.penge, liv: START.liv, boelge: 0, klaret: 0, fase: 'vent', vent: 20,
+export function nytSpil(baneId, udstyr, svaer = 'normal') {
+  const S = SVAER[svaer] || SVAER.normal;
+  return { bane: lavBane(baneId), udstyr: [...udstyr], svaer: S, svaerId: svaer, antal: S.boelger, penge: S.penge, liv: S.liv, boelge: 0, klaret: 0, fase: 'vent', vent: 20,
     koe: [], ekstra: [], bt: 0, fjender: [], taarne: [], skud: [], enheder: [], fx: [], t: 0, nr: 1, draebt: 0 };
 }
 export const antalBoelger = BOELGER.length;
@@ -95,7 +103,7 @@ export function spring(g) { if (g.fase === 'vent') g.vent = 0; }
 
 function nyFjende(g, type, s = 0) {
   const d = FJENDER[type], hp = Math.round(d.hp * hpFaktor(g.boelge));
-  const f = { nr: g.nr++, type, d, hp, max: hp, s, x: 0, y: 0, v: 0, brems: 1, bremsT: 0, brand: 0, brandT: 0, yngelT: d.yngel ? d.yngel[1] : 0 };
+  const f = { nr: g.nr++, type, d, hp: Math.round(hp * (g.svaer?.hp || 1)), max: Math.round(hp * (g.svaer?.hp || 1)), s, x: 0, y: 0, v: 0, brems: 1, bremsT: 0, brand: 0, brandT: 0, yngelT: d.yngel ? d.yngel[1] : 0 };
   sted(g.bane, s, f); g.fjender.push(f); return f;
 }
 
@@ -350,11 +358,11 @@ export function skridt(g, dt) {
     for (const t of g.taarne) if (t.def.art === 'moelle') { const n = t.def.trin[t.trin].tjen; bonus += n; t.skudT = g.t; g.fx.push({ a: 'tjen', x: t.x, y: t.y, n }); }
     g.penge += bonus;
     g.fx.push({ a: 'klaret', n: bonus });
-    if (g.boelge >= BOELGER.length && !g.versus) { g.fase = 'vundet'; g.fx.push({ a: 'vundet' }); } else { g.fase = 'vent'; g.vent = 8; }
+    if (g.boelge >= (g.antal || BOELGER.length) && !g.versus) { g.fase = 'vundet'; g.fx.push({ a: 'vundet' }); } else { g.fase = 'vent'; g.vent = 8; }
   }
 }
 
-export function moenterFor(g) {         // hvad et spil giver til arsenalet
+export function moenterFor(g) {         // hvad et spil giver til arsenalet, mere jo sværere
   let n = 0; for (let w = 1; w <= g.klaret; w++) n += 5 + w;
-  return n + (g.fase === 'vundet' ? 300 : 0);
+  return Math.round((n + (g.fase === 'vundet' ? 300 : 0)) * (g.svaer?.moenter || 1));
 }

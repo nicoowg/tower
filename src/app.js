@@ -20,6 +20,7 @@ let gem;
 try { gem = JSON.parse(localStorage.getItem(NOEGLE)); } catch {}
 if (!gem || !Array.isArray(gem.ejer)) gem = { moenter: START.moenter, ejer: [...START.ejer], udstyr: [...START.udstyr], bedst: {}, bane: BANER[0].id, lyd: true };
 if (!BANER.some((b) => b.id === gem.bane)) gem.bane = BANER[0].id;      // banen findes ikke mere
+gem.svaer ||= 'normal';
 gem.outfits ||= [];                // de outfits, man ejer
 gem.paa ||= {};                    // hvilket outfit hvert tårn har på
 gem.indst = { grafik: true, skygger: true, skarp: true, stemning: true, glid: true, online: true, diorama: true, ...(gem.indst || {}) };
@@ -125,8 +126,10 @@ function spilSide() {
   }
   for (const [b, k] of banekort) {
     k.classList.toggle('paa', gem.bane === b.id);
-    k.querySelector('span').textContent = gem.bedst[b.id] ? (gem.bedst[b.id] >= sim.antalBoelger ? 'Holdt alle ' + sim.antalBoelger + ' bølger' : 'Nåede bølge ' + gem.bedst[b.id]) : '';
+    k.querySelector('span').textContent = gem.bedst[b.id] ? 'Bedst: bølge ' + gem.bedst[b.id] : '';
   }
+  $('svaer').innerHTML = Object.entries(sim.SVAER).map(([k, v]) => `<button data-s="${k}" class="${gem.svaer === k ? 'paa' : ''}">${v.navn}</button>`).join('');
+  $('svaer').querySelectorAll('button').forEach((b) => { b.onclick = () => { gem.svaer = b.dataset.s; husk(); lyd('klik'); spilSide(); }; });
   udstyrRaekke($('udstyr'));
   $('spil').disabled = !gem.udstyr.length;
 }
@@ -289,7 +292,7 @@ async function startKamp(vs) {
   const baneId = vs ? vs.bane : gem.bane, valgt_ = BANER.find((b) => b.id === baneId) || BANER[0];
   if (valgt_.by) { $('hent').classList.remove('vaek'); $('hentLinje').style.width = '35%'; await hentBy(valgt_.by); $('hentLinje').style.width = '100%'; $('hent').classList.add('vaek'); }      // byerne hentes, når de skal bruges
   vis('kamp'); se ||= lavVisning($('rum'), $('lag'));
-  g = sim.nytSpil(baneId, gem.udstyr); if (vs) g.versus = vs; placerer = null; valgt = null; pause = false; udbetalt = false; fart = 1;
+  g = sim.nytSpil(baneId, gem.udstyr, vs ? 'normal' : gem.svaer); if (vs) g.versus = vs; placerer = null; valgt = null; pause = false; udbetalt = false; fart = 1;
   $('fart').textContent = '1×'; document.body.classList.remove('pauset'); $('slut').hidden = true; $('valgt').hidden = true;
   se.saetOutfits(gem.paa); brugIndst(); se.saetSpil(g); se.stoerrelse();
   const dok = $('dok'); dok.innerHTML = '';
@@ -450,7 +453,7 @@ function slut(vundet) {
   if (g.versus) { online.status(g); const el = $('slut'); el.innerHTML = '<h3>Du er ude</h3><p>Venter på de andre</p>'; el.hidden = false; return; }
   const n = udbetal(), el = $('slut');
   placerer = null; se.spoegelse(null); vaelgTaarn(null);
-  el.innerHTML = `<h3>${vundet ? 'Skansen holdt' : 'Skansen faldt'}</h3><p>${vundet ? `Alle ${sim.antalBoelger} bølger er slået.` : `Du nåede bølge ${g.boelge} af ${sim.antalBoelger}.`}<br>${n ? `Du får ${tal(n)} mønter til arsenalet.` : ''}</p>
+  el.innerHTML = `<h3>${vundet ? 'Skansen holdt' : 'Skansen faldt'}</h3><p>${g.svaer.navn} · ${vundet ? `Alle ${g.antal} bølger er slået.` : `Du nåede bølge ${g.boelge} af ${g.antal}.`}<br>${n ? `Du får ${tal(n)} mønter til arsenalet.` : ''}</p>
     <div class="to"><button class="knap" id="hjem">Forside</button><button class="knap hvid" id="igen">Igen</button></div>`;
   el.hidden = false;
   $('hjem').onclick = () => { online.forlad(); g = null; se.saetSpil(null); saetStemning(null); hub(); };
@@ -458,7 +461,7 @@ function slut(vundet) {
 }
 
 function hud() {
-  saet('liv', g.liv); saet('penge', tal(g.penge)); saet('boelge', `${Math.max(1, g.boelge + (g.fase === 'vent' ? 1 : 0))}${g.versus ? '' : ' / ' + sim.antalBoelger}`);
+  saet('liv', g.liv); saet('penge', tal(g.penge)); saet('boelge', `${Math.max(1, g.boelge + (g.fase === 'vent' ? 1 : 0))}${g.versus ? '' : ' / ' + g.antal}`);
   if (g.versus) { for (const b of $('send').children) b.classList.toggle('dyr', g.penge < SEND[+b.dataset.i].pris); if (g.t - (g.sidstStatus || -9) > 1) { g.sidstStatus = g.t; online.status(g); } }
   $('liv').parentElement.classList.toggle('lav', g.liv <= 30);
   for (const s of $('dok').children) {

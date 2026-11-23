@@ -157,7 +157,9 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .prikker i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .22); transition: width .3s, background .3s; }
 .prikker i.paa { width: 20px; background: #fff; }
 .knap.stor { height: 64px; padding: 0 52px; border-radius: 32px; font-size: 17px; }
-.baner { grid-template-columns: repeat(5, 1fr); }
+.baner { grid-template-columns: repeat(4, 1fr); }
+.svaervalg { align-self: center; display: grid; grid-template-columns: repeat(4, 120px); padding: 4px; border-radius: 20px; }
+.svaervalg button { height: 34px; border-radius: 17px; font-size: 13px; }
 .bane b { font-size: 14px; }
 .bane span { min-height: 0; }
 
