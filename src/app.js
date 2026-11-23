@@ -1,8 +1,8 @@
 // Skærmene: forside, arsenal og kamp. Reglerne er i sim.js, det man ser i se.js.
-import { TAARNE, FJENDER, BANER, START, MAKS_MOELLER } from './data.js';
+import { TAARNE, FJENDER, BANER, START, MAKS_MOELLER, LAAS_BOELGE } from './data.js';
 import * as sim from './sim.js';
 import { hentModeller, hentBy, lavVisning, lavFremviser } from './se.js';
-import { spil as lyd, saetLyd, saetStemning } from './lyd.js';
+import { spil as lyd, saetLyd, saetStemning, pludre } from './lyd.js';
 import { TEMAER, tema, sjaeldenhed, outfitId, dagensButik, tidTilNyButik, dag, ejerNavn, tjekEjer } from './stil.js';
 import { lavOnline, SEND } from './online.js';
 
@@ -23,7 +23,7 @@ if (!BANER.some((b) => b.id === gem.bane)) gem.bane = BANER[0].id;      // banen
 gem.svaer ||= 'normal';
 gem.outfits ||= [];                // de outfits, man ejer
 gem.paa ||= {};                    // hvilket outfit hvert tårn har på
-gem.indst = { grafik: true, skygger: true, skarp: true, stemning: true, glid: true, online: true, diorama: true, ...(gem.indst || {}) };
+gem.indst = { grafik: true, skygger: true, skarp: true, stemning: true, glid: true, online: true, diorama: true, snak: true, ...(gem.indst || {}) };
 let macTillader = true;            // i Mac-appen kan zfeeka slå online fra
 const husk = () => { try { localStorage.setItem(NOEGLE, JSON.stringify(gem)); } catch {} };
 const ejerKonto = () => !!gem.ejerKonto;
@@ -55,8 +55,8 @@ function linjer(d, s) {
 const billede = (id) => `<img src="billeder/${id}.jpg" alt="" draggable="false">`;
 
 // ---------- forsiden: seks sider ved siden af hinanden ----------
-const SIDER = ['spil', 'online', 'arsenal', 'garderobe', 'butik', 'indstillinger'];
-let nr = 0, fremviser = null, fremviser2 = null, fotograf = null;
+const SIDER = ['start', 'spil', 'online', 'arsenal', 'garderobe', 'butik', 'indstillinger'];
+let nr = 0, fremviser = null, fremviser2 = null, fremviser3 = null, fotograf = null;
 function gaaTil(n, lydløs) {
   nr = Math.max(0, Math.min(SIDER.length - 1, n));
   $('spor').style.transform = `translateX(${-nr * 100}%)`;
@@ -71,7 +71,7 @@ function gaaTil(n, lydløs) {
 function tegnSide() {
   $('moenter').textContent = ejerKonto() ? '∞' : tal(gem.moenter);
   $('navnvis').textContent = gem.navn || ''; $('ejerprik').classList.toggle('ejer', ejerKonto());
-  ({ spil: spilSide, online: onlineSide, arsenal, garderobe, butik, indstillinger })[SIDER[nr]]();
+  ({ start: startSide, spil: spilSide, online: onlineSide, arsenal, garderobe, butik, indstillinger })[SIDER[nr]]();
 }
 function hub(n = nr) { vis('hub'); gaaTil(n, true); }
 document.querySelectorAll('#faner button').forEach((b) => { b.onclick = () => gaaTil(+b.dataset.s); });
@@ -89,9 +89,41 @@ addEventListener('keydown', (e) => {
   if (side !== 'hub' || e.target.tagName === 'INPUT') return;
   if (e.key === 'ArrowRight') gaaTil(nr + 1); else if (e.key === 'ArrowLeft') gaaTil(nr - 1);
   else if (e.key === 'Enter' && SIDER[nr] === 'spil') startKamp();
-  else if (e.key >= '1' && e.key <= '6') gaaTil(+e.key - 1);
+  else if (e.key >= '1' && e.key <= '7') gaaTil(+e.key - 1);
 });
 addEventListener('resize', () => { if (side === 'hub') gaaTil(nr, true); });
+
+// ---------- Start ----------
+let startFigur = null;
+function startSide() {
+  fremviser3 ||= lavFremviser($('skive3'));
+  fotograf ||= lavFremviser(document.createElement('canvas'));
+  const ejede = TAARNE.filter((d) => ejerTaarn(d.id));
+  if (!startFigur) { const d = ejede[Math.random() * ejede.length | 0] || TAARNE[0]; startFigur = d.id; }
+  fremviser3.vis(startFigur, 4, gem.paa[startFigur]);
+  if (!aabenId(gem.bane)) { gem.bane = BANER[0].id; husk(); }
+  const b = BANER.find((x) => x.id === gem.bane);
+  $('sHilsen').textContent = gem.navn ? `Velkommen tilbage, ${gem.navn}` : '';
+  $('sSpil').innerHTML = `${ikon('play')}Spil ${b.navn}`;
+  const aabne = BANER.filter((_, j) => baneAaben(j)).length, bedst = Math.max(0, ...Object.values(gem.bedst));
+  $('sTal').innerHTML = [['Baner', `${aabne} / ${BANER.length}`], ['Bedste bølge', bedst || 0], ['Tårne', `${ejede.length} / ${TAARNE.length}`], ['Outfits', gem.outfits.length]].map(([a, v]) => `<div class="glas"><span>${a}</span><b>${v}</b></div>`).join('');
+  const n = BANER.findIndex((_, j) => !baneAaben(j)), el = $('sNaeste');
+  el.hidden = n < 0;
+  if (n >= 0) {
+    const forr = BANER[n - 1], v = gem.bedst[forr.id] || 0;
+    el.innerHTML = `<canvas></canvas><div><span>Næste bane</span><b>${BANER[n].navn}</b><small>Klar ${LAAS_BOELGE} bølger på ${forr.navn}</small><i><u style="width:${Math.min(100, (v / LAAS_BOELGE) * 100)}%"></u></i></div>`;
+    tegnBane(el.querySelector('canvas'), BANER[n]);
+    el.onclick = () => { gem.bane = forr.id; husk(); lyd('klik'); startKamp(); };
+  }
+  $('sButik').innerHTML = '';
+  for (const o of dagensButik()) {
+    const t = tema(o.tema), k = h('button', 'glas', `<img src="${fotograf.foto(o.taarn, o.tema)}" alt="" draggable="false"><b>${t.navn}</b><span class="sj sj-${sjaeldenhed(o.pris)}">${ejerOutfit(o.id) ? 'Ejet' : tal(o.pris)}</span>`);
+    k.onclick = () => gaaTil(SIDER.indexOf('butik'));
+    $('sButik').append(k);
+  }
+}
+$('sSpil').onclick = () => { lyd('klik'); startKamp(); };
+$('sBaner').onclick = () => gaaTil(SIDER.indexOf('spil'));
 
 // ---------- Spil ----------
 function tegnBane(c, b) {
@@ -113,21 +145,26 @@ function udstyrRaekke(el, klik) {
     el.append(p);
   }
 }
+// En bane er åben, når man har klaret LAAS_BOELGE bølger på banen før, eller allerede har spillet den. Ejeren har alle.
+function baneAaben(i) { return i === 0 || ejerKonto() || (gem.bedst[BANER[i].id] || 0) > 0 || (gem.bedst[BANER[i - 1].id] || 0) >= LAAS_BOELGE; }
+const aabenId = (id) => baneAaben(BANER.findIndex((b) => b.id === id));
 let banekort = null;
 function spilSide() {
+  if (!aabenId(gem.bane)) { gem.bane = BANER[0].id; husk(); }
   const el = $('baner');
   if (!banekort) {                          // tegnes kun én gang; derefter skiftes kun markeringen
     banekort = BANER.map((b) => {
       const k = h('button', 'bane glas', `<canvas></canvas><b>${b.navn}</b><span></span>`);
       tegnBane(k.querySelector('canvas'), b);
-      k.onclick = () => { gem.bane = b.id; husk(); lyd('klik'); online.skiftBane(b.id); spilSide(); };
+      k.onclick = () => { if (!aabenId(b.id)) { lyd('nej'); return; } gem.bane = b.id; husk(); lyd('klik'); online.skiftBane(b.id); spilSide(); };
       el.append(k); return [b, k];
     });
   }
-  for (const [b, k] of banekort) {
-    k.classList.toggle('paa', gem.bane === b.id);
-    k.querySelector('span').textContent = gem.bedst[b.id] ? 'Bedst: bølge ' + gem.bedst[b.id] : '';
-  }
+  banekort.forEach(([b, k], i) => {
+    const aaben = baneAaben(i);
+    k.classList.toggle('paa', gem.bane === b.id); k.classList.toggle('laast', !aaben);
+    k.querySelector('span').innerHTML = !aaben ? `${ikon('lock')}Klar ${LAAS_BOELGE} bølger på ${BANER[i - 1].navn}` : gem.bedst[b.id] ? 'Bedst: bølge ' + gem.bedst[b.id] : '';
+  });
   $('svaer').innerHTML = Object.entries(sim.SVAER).map(([k, v]) => `<button data-s="${k}" class="${gem.svaer === k ? 'paa' : ''}">${v.navn}</button>`).join('');
   $('svaer').querySelectorAll('button').forEach((b) => { b.onclick = () => { gem.svaer = b.dataset.s; husk(); lyd('klik'); spilSide(); }; });
   udstyrRaekke($('udstyr'));
@@ -209,7 +246,7 @@ function butik() {
     for (const o of varer) {
       const t = tema(o.tema), ejer = ejerOutfit(o.id);
       const k = h('button', 'vare glas' + (ejer ? ' ejet' : ''), `<div class="foto" style="--glod:${t.lys || t.k1}55"><img src="${fotograf.foto(o.taarn, o.tema)}" alt="" draggable="false"></div><b>${t.navn}</b><span>${T[o.taarn].navn} · <span class="sj sj-${sjaeldenhed(o.pris)}">${sjaeldenhed(o.pris)}</span></span><div class="pris">${ejer ? 'Ejet' : ikon('gem') + tal(o.pris)}</div>`);
-      k.onclick = () => { if (!ejer) koeb(o.id, o.pris, () => butik()); else { gTaarn = o.taarn; gTema = o.tema; gaaTil(3); } };
+      k.onclick = () => { if (!ejer) koeb(o.id, o.pris, () => butik()); else { gTaarn = o.taarn; gTema = o.tema; gaaTil(SIDER.indexOf('garderobe')); } };
       el.append(k);
     }
   }
@@ -220,8 +257,8 @@ function butik() {
 // ---------- Indstillinger ----------
 const INDST = [
   ['Billede', [['diorama', 'Byer som ø'], ['grafik', 'Dybdeskarphed og glød'], ['skygger', 'Skygger'], ['skarp', 'Høj opløsning'], ['glid', 'Bløde kamerabevægelser']]],
-  ['Lyd', [['lyd', 'Lyd'], ['stemning', 'Baggrundslyd']]],
-  ['Spil', [['auto', 'Start næste bølge selv'], ['online', 'Online']]],
+  ['Lyd', [['lyd', 'Lyd'], ['stemning', 'Baggrundslyd'], ['snak', 'Monstre snakker']]],
+  ['Spil', [['auto', 'Start næste bølge selv'], ['online', 'Online (beta)']]],
 ];
 function indstillinger() {
   const el = $('indst');
@@ -243,7 +280,7 @@ function brugIndst() {
   se.saetDiorama?.(gem.indst.diorama); se.grafik(gem.indst.grafik); se.skygger(gem.indst.skygger); se.saetSkarp?.(gem.indst.skarp); se.saetGlid?.(gem.indst.glid);
 }
 
-const stemningFor = (b) => (b.oe ? 'oe' : b.tema || (b.by ? 'by' : 'rum'));
+const stemningFor = (b) => b.stil?.lyd || (b.oe ? 'oe' : b.tema || (b.by ? 'by' : 'rum'));
 
 // ---------- Online ----------
 const online = lavOnline({
@@ -291,7 +328,7 @@ const saet = (id, v) => { if (vist[id] !== v) { vist[id] = v; $(id).textContent 
 async function startKamp(vs) {
   const baneId = vs ? vs.bane : gem.bane, valgt_ = BANER.find((b) => b.id === baneId) || BANER[0];
   if (valgt_.by) { $('hent').classList.remove('vaek'); $('hentLinje').style.width = '35%'; await hentBy(valgt_.by); $('hentLinje').style.width = '100%'; $('hent').classList.add('vaek'); }      // byerne hentes, når de skal bruges
-  vis('kamp'); se ||= lavVisning($('rum'), $('lag'));
+  vis('kamp'); if (!se) { se = lavVisning($('rum'), $('lag')); se.naarSnak((h, n, s_) => { if (gem.indst.snak) pludre(h, n, s_); }); }
   g = sim.nytSpil(baneId, gem.udstyr, vs ? 'normal' : gem.svaer); if (vs) g.versus = vs; placerer = null; valgt = null; pause = false; udbetalt = false; fart = 1;
   $('fart').textContent = '1×'; document.body.classList.remove('pauset'); $('slut').hidden = true; $('valgt').hidden = true;
   se.saetOutfits(gem.paa); brugIndst(); se.saetSpil(g); se.stoerrelse();
@@ -451,11 +488,14 @@ function udbetal() {
 }
 function slut(vundet) {
   if (g.versus) { online.status(g); const el = $('slut'); el.innerHTML = '<h3>Du er ude</h3><p>Venter på de andre</p>'; el.hidden = false; return; }
-  const n = udbetal(), el = $('slut');
+  const foer = BANER.filter((_, j) => baneAaben(j)).length, n = udbetal(), el = $('slut');
+  const ny = BANER.find((_, j) => j < BANER.length && baneAaben(j) && j >= foer);          // en ny bane er åbnet af dette spil
   placerer = null; se.spoegelse(null); vaelgTaarn(null);
-  el.innerHTML = `<h3>${vundet ? 'Skansen holdt' : 'Skansen faldt'}</h3><p>${g.svaer.navn} · ${vundet ? `Alle ${g.antal} bølger er slået.` : `Du nåede bølge ${g.boelge} af ${g.antal}.`}<br>${n ? `Du får ${tal(n)} mønter til arsenalet.` : ''}</p>
-    <div class="to"><button class="knap" id="hjem">Forside</button><button class="knap hvid" id="igen">Igen</button></div>`;
+  el.innerHTML = `<h3>${vundet ? 'Skansen holdt' : 'Skansen faldt'}</h3><p>${g.svaer.navn} · ${vundet ? `Alle ${g.antal} bølger er slået.` : `Du nåede bølge ${g.boelge} af ${g.antal}.`}<br>${n ? `Du får ${tal(n)} mønter.` : ''}</p>
+    ${ny ? `<p class="nybane">${ikon('flag')}Ny bane åben: <b>${ny.navn}</b></p>` : ''}
+    <div class="to"><button class="knap" id="hjem">Forside</button>${ny ? `<button class="knap" id="igen">Igen</button><button class="knap hvid" id="nyBane">Spil ${ny.navn}</button>` : '<button class="knap hvid" id="igen">Igen</button>'}</div>`;
   el.hidden = false;
+  if (ny) { lyd('vundet'); $('nyBane').onclick = () => { gem.bane = ny.id; husk(); startKamp(); }; }
   $('hjem').onclick = () => { online.forlad(); g = null; se.saetSpil(null); saetStemning(null); hub(); };
   $('igen').onclick = () => startKamp();
 }
@@ -485,7 +525,7 @@ let sidst = performance.now();
 function ramme(nu) {
   requestAnimationFrame(ramme);
   const dt = Math.min(0.05, (nu - sidst) / 1000); sidst = nu;
-  if (side === 'hub') { if (SIDER[nr] === 'arsenal') fremviser?.tegn(dt); else if (SIDER[nr] === 'garderobe') fremviser2?.tegn(dt); }
+  if (side === 'hub') { if (SIDER[nr] === 'arsenal') fremviser?.tegn(dt); else if (SIDER[nr] === 'garderobe') fremviser2?.tegn(dt); else if (SIDER[nr] === 'start') fremviser3?.tegn(dt); }
   if (side !== 'kamp' || !g) return;
   if (mellemrum && !mellemrum.spoler && nu - mellemrum.t > 220) { mellemrum.spoler = true; if (pause) $('pause').click(); $('fart').classList.add('paa'); $('fart').textContent = '4×'; }
   const skridt_ = snyd.paa.fart8 ? 8 : mellemrum?.spoler ? 4 : fart;
@@ -514,7 +554,7 @@ hentModeller((u) => { $('hentLinje').style.width = u * 100 + '%'; }).then(async 
   const q = new URLSearchParams(location.search);
   requestAnimationFrame(ramme);
   if (!gem.navn && !q.get('side')) await spoergNavn();
-  if (q.get('lobby')) { hub(1); online.join(q.get('lobby')); return; }
+  if (q.get('lobby')) { hub(SIDER.indexOf('online')); online.join(q.get('lobby')); return; }
   if (q.get('side') === 'kamp') startKamp();
   else { if (q.get('kort')) valgtKort = q.get('kort'); hub(Math.max(0, SIDER.indexOf(q.get('side')))); }
 });

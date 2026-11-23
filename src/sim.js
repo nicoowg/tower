@@ -320,7 +320,7 @@ export function skridt(g, dt) {
     f.s += f.d.fart * f.brems * dt * (g.bane.fart || 1);          // på øen går det op ad bakke, så alle er lidt langsommere
     if (f.s >= g.bane.laengde) {
       f.hp = 0; g.liv -= f.d.liv;
-      g.fx.push({ a: 'laek', n: f.d.liv });
+      g.fx.push({ a: 'laek', n: f.d.liv, x: f.x, y: f.y, type: f.type });
       if (g.liv <= 0 && g.udoedelig) g.liv = 1;
       if (g.liv <= 0) { g.liv = 0; g.fase = 'tabt'; g.fx.push({ a: 'tabt' }); return; }
       continue;

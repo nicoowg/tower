@@ -157,7 +157,12 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .prikker i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .22); transition: width .3s, background .3s; }
 .prikker i.paa { width: 20px; background: #fff; }
 .knap.stor { height: 64px; padding: 0 52px; border-radius: 32px; font-size: 17px; }
-.baner { grid-template-columns: repeat(4, 1fr); }
+.baner { grid-template-columns: repeat(5, 1fr); max-height: calc(100vh - 300px); overflow-y: auto; scrollbar-width: none; padding: 2px; margin: -2px; }
+.baner::-webkit-scrollbar { display: none; }
+.bane.laast { opacity: .5; }
+.bane.laast canvas { filter: grayscale(.9) brightness(.6); }
+.bane.laast:hover { transform: none; }
+.bane span .i { width: 12px; height: 12px; margin-right: 5px; vertical-align: -1px; }
 .svaervalg { align-self: center; display: grid; grid-template-columns: repeat(4, 120px); padding: 4px; border-radius: 20px; }
 .svaervalg button { height: 34px; border-radius: 17px; font-size: 13px; }
 .bane b { font-size: 14px; }
@@ -259,3 +264,38 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .send button:hover { background: rgba(255, 255, 255, .07); }
 .send button.dyr { opacity: .35; }
 .saa-valgt .valgt { top: auto; bottom: 90px; transform: none; }
+
+/* Start */
+.start { position: absolute; inset: 0 24px 40px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; width: min(1200px, 100% - 48px); margin: 0 auto; }
+.startv { display: flex; flex-direction: column; gap: 22px; }
+.hilsen_ { color: var(--t3); font-size: 15px; }
+.startlogo { font-size: clamp(72px, 10vw, 132px); letter-spacing: -6px; line-height: .85; margin-top: -10px; }
+.startknapper { display: flex; gap: 12px; }
+.startknapper .i { margin-right: 10px; }
+.starttal { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.starttal div { padding: 14px 16px; border-radius: 20px; display: flex; flex-direction: column; gap: 4px; }
+.starttal span { color: var(--t3); font-size: 12px; }
+.starttal b { font-size: 22px; letter-spacing: -.6px; }
+.naestebane { display: flex; gap: 16px; align-items: center; padding: 10px; border-radius: 24px; text-align: left; }
+.naestebane canvas { width: 150px; aspect-ratio: 16 / 9; border-radius: 16px; filter: grayscale(.7) brightness(.7); flex: none; }
+.naestebane div { display: flex; flex-direction: column; gap: 3px; flex: 1; padding-right: 10px; }
+.naestebane span, .naestebane small { color: var(--t3); font-size: 12px; }
+.naestebane b { font-size: 18px; }
+.naestebane i { display: block; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .1); margin-top: 6px; overflow: hidden; }
+.naestebane u { display: block; height: 100%; background: #fff; border-radius: 3px; }
+.starth { display: flex; flex-direction: column; gap: 14px; height: 100%; justify-content: center; }
+#skive3 { width: 100%; aspect-ratio: 1.15; max-height: 56vh; }
+.startbutik { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.startbutik button { display: flex; flex-direction: column; gap: 2px; padding: 8px 8px 10px; border-radius: 18px; text-align: left; transition: transform .16s; }
+.startbutik button:hover { transform: translateY(-2px); }
+.startbutik img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; }
+.startbutik b { font-size: 13px; margin-top: 4px; }
+.startbutik span { font-size: 11px; }
+@media (max-width: 900px) { .start { grid-template-columns: 1fr; overflow-y: auto; } .starttal { grid-template-columns: repeat(2, 1fr); } }
+.bane span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beta { display: inline-block; vertical-align: 4px; margin-left: 6px; padding: 3px 9px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: .3px; color: #000; background: #fff; }
+.nybane { display: flex; align-items: center; gap: 8px; justify-content: center; color: var(--t1) !important; }
+.nybane .i { color: #fff; }
+.slut .to:has(#nyBane) { grid-template-columns: auto auto 1fr; display: grid; }
+.slut .to:has(#nyBane) .knap { white-space: nowrap; padding: 0 20px; }
+.slut { min-width: 400px; }

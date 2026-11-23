@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TAARNE, FJENDER, FELT, VEJ } from './data.js';
+import { pers, saetning, RAAB, VARIGHED, vaelgHandling, pose } from './sind.js';
 import { tal, DRONEBANE, tagVed, TAGBONUS } from './sim.js';
 import { klaed, klaedOm } from './stof.js';
 import { tema } from './stil.js';
@@ -84,14 +85,14 @@ function grundBillede(bane) {
   if (oe) {                                     // øen: græs, sten og sø. Alt uden for kysten er gennemsigtigt
     k.clearRect(-m / K, -m / K, c.width / s, c.height / s);
     k.save(); flade(bane.land); k.clip();
-    const OG = { miami: ['#4f9a56', '#3a7a44', '#e8d2a6'], lagune: ['#1d4a2c', '#12301d', '#bfa77e'] }[bane.oeTema] || ['#234a2c', '#16301e', null];
+    const OG = bane.stil ? [bane.stil.graes[0], bane.stil.graes[1], bane.stil.sand] : { miami: ['#4f9a56', '#3a7a44', '#e8d2a6'], lagune: ['#1d4a2c', '#12301d', '#bfa77e'] }[bane.oeTema] || ['#234a2c', '#16301e', null];
     f = k.createRadialGradient(760, 430, 60, 760, 430, 900); f.addColorStop(0, OG[0]); f.addColorStop(1, OG[1]); k.fillStyle = f; k.fillRect(0, 0, FELT.b, FELT.h);
     let fr = 7; const tf = () => (fr = (fr * 16807) % 2147483647) / 2147483647;
     for (let i = 0; i < 520; i++) { k.fillStyle = tf() < 0.5 ? 'rgba(10,26,14,.16)' : 'rgba(120,170,96,.07)'; k.beginPath(); k.ellipse(tf() * FELT.b, tf() * FELT.h, 8 + tf() * 34, 5 + tf() * 18, tf() * 3, 0, 7); k.fill(); }
     for (let i = 0; i < 260; i++) { k.fillStyle = 'rgba(70,74,78,.5)'; k.beginPath(); k.ellipse(tf() * FELT.b, tf() * FELT.h, 1.5 + tf() * 4, 1 + tf() * 3, tf() * 3, 0, 7); k.fill(); }
     if (OG[2]) { k.lineWidth = 90; k.strokeStyle = OG[2]; flade(bane.land); k.stroke(); k.lineWidth = 26; k.strokeStyle = 'rgba(0,0,0,.12)'; k.stroke(); }      // sandstrand langs kysten
     else { k.lineWidth = 14; k.strokeStyle = 'rgba(8,16,10,.5)'; flade(bane.land); k.stroke(); }
-    for (const p of bane.vand) { flade(p); k.fillStyle = { miami: '#3fc8d8', lagune: '#0c4a58' }[bane.oeTema] || '#0d2733'; k.fill(); k.lineWidth = 3; k.strokeStyle = 'rgba(190,225,240,.3)'; k.stroke(); }
+    for (const p of bane.vand) { flade(p); k.fillStyle = bane.stil?.soe || { miami: '#3fc8d8', lagune: '#0c4a58' }[bane.oeTema] || '#0d2733'; k.fill(); k.lineWidth = 3; k.strokeStyle = 'rgba(190,225,240,.3)'; k.stroke(); }
     k.restore();
     for (const p of bane.bro) { flade(p); k.fillStyle = '#4a3320'; k.fill(); }
   } else if (bane.vand) {
@@ -103,7 +104,7 @@ function grundBillede(bane) {
   const vej = () => { k.beginPath(); bane.p.forEach((q, i) => (i ? k.lineTo(q[0], q[1]) : k.moveTo(q[0], q[1]))); };
   k.lineJoin = k.lineCap = 'round';
   vej(); k.lineWidth = VEJ + 5; k.strokeStyle = 'rgba(255,255,255,.2)'; k.stroke();
-  vej(); k.lineWidth = VEJ; k.strokeStyle = oe ? '#3a3732' : P.vej; k.stroke();
+  vej(); k.lineWidth = VEJ; k.strokeStyle = bane.stil?.vej_ || (oe ? '#3a3732' : P.vej); k.stroke();
   vej(); k.lineWidth = 2; k.setLineDash([14, 22]); k.strokeStyle = 'rgba(255,255,255,.10)'; k.stroke();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return { t, b: c.width / pr, h: c.height / pr, oe };
@@ -143,21 +144,22 @@ export function lavVisning(laerred, lag) {
   };
   let vejr = null, nordlys = [];
   function vejrOp(tema_) {                     // sne, der falder, eller kirsebærblade, der flyver; altid lige omkring det, man ser på
-    const n = tema_ === 'sne' ? 2600 : tema_ === 'tech' ? 700 : 900, pos = new Float32Array(n * 3), fart = new Float32Array(n * 3);
+    const n = tema_ === 'sne' ? 2600 : tema_ === 'tech' || tema_ === 'glod' ? 700 : 900, pos = new Float32Array(n * 3), fart = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { pos[i * 3] = (Math.random() - 0.5) * 120; pos[i * 3 + 1] = Math.random() * 30; pos[i * 3 + 2] = (Math.random() - 0.5) * 80; fart[i * 3] = Math.random() * 6.28; fart[i * 3 + 1] = 0.6 + Math.random() * 0.8; fart[i * 3 + 2] = Math.random(); }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const c = document.createElement('canvas'); c.width = c.height = 32; const k = c.getContext('2d');
     if (tema_ === 'tech') { const f = k.createRadialGradient(16, 16, 0, 16, 16, 16); f.addColorStop(0, 'rgba(160,250,255,1)'); f.addColorStop(0.4, 'rgba(45,240,255,.6)'); f.addColorStop(1, 'rgba(45,240,255,0)'); k.fillStyle = f; k.fillRect(0, 0, 32, 32); }
+    else if (tema_ === 'glod') { const f = k.createRadialGradient(16, 16, 0, 16, 16, 16); f.addColorStop(0, 'rgba(255,230,160,1)'); f.addColorStop(0.35, 'rgba(255,110,30,.7)'); f.addColorStop(1, 'rgba(255,60,10,0)'); k.fillStyle = f; k.fillRect(0, 0, 32, 32); }
     else if (tema_ === 'sne') { const f = k.createRadialGradient(16, 16, 0, 16, 16, 16); f.addColorStop(0, 'rgba(255,255,255,1)'); f.addColorStop(1, 'rgba(255,255,255,0)'); k.fillStyle = f; k.fillRect(0, 0, 32, 32); }
     else { k.fillStyle = '#ffb3c9'; k.beginPath(); k.ellipse(16, 16, 13, 7, 0.6, 0, 7); k.fill(); k.fillStyle = '#ffd6e2'; k.beginPath(); k.ellipse(13, 14, 6, 3, 0.6, 0, 7); k.fill(); }
     const t = new THREE.CanvasTexture(c);
-    const o = new THREE.Points(geo, new THREE.PointsMaterial({ map: t, blending: tema_ === 'tech' ? THREE.AdditiveBlending : THREE.NormalBlending, size: tema_ === 'sne' ? 0.16 : tema_ === 'tech' ? 0.2 : 0.24, transparent: true, depthWrite: false, opacity: tema_ === 'sne' ? 0.85 : 0.95 }));
+    const o = new THREE.Points(geo, new THREE.PointsMaterial({ map: t, blending: tema_ === 'tech' || tema_ === 'glod' ? THREE.AdditiveBlending : THREE.NormalBlending, size: tema_ === 'sne' ? 0.16 : tema_ === 'tech' || tema_ === 'glod' ? 0.2 : 0.24, transparent: true, depthWrite: false, opacity: tema_ === 'sne' ? 0.85 : 0.95 }));
     o.frustumCulled = false; scene.add(o); vejr = { o, fart, tema: tema_ };
   }
   function vejrSkridt(dt) {
     if (!vejr) return;
     const p = vejr.o.geometry.attributes.position.array, f = vejr.fart, sne = vejr.tema === 'sne', mx = midte.x, mz = midte.z;
-    if (vejr.tema === 'tech') {                 // lyspartikler, der stiger langsomt op fra gaderne
+    if (vejr.tema === 'tech' || vejr.tema === 'glod') {                 // lyspartikler eller gløder, der stiger langsomt op
       for (let i = 0; i < p.length; i += 3) { p[i + 1] += f[i + 1] * 0.8 * dt; p[i] += Math.sin(tid + f[i]) * 0.1 * dt; if (p[i + 1] > 16 || Math.abs(p[i] - mx) > 60 || Math.abs(p[i + 2] - mz) > 40) { p[i] = mx + (Math.random() - 0.5) * 120; p[i + 1] = Math.random() * 0.5; p[i + 2] = mz + (Math.random() - 0.5) * 80; } }
       vejr.o.geometry.attributes.position.needsUpdate = true; return;
     }
@@ -235,11 +237,49 @@ export function lavVisning(laerred, lag) {
     miami: { h: himmelAf([[0, '#2a1b4a'], [0.45, '#7a3a6a'], [0.75, '#ff7a5a'], [1, '#ffc27a']]), taage: 0xd88a8a, hav: 0x1aa5b8, sol: 0xffc08a, solI: 2.8, himI: 0.9 },
     lagune: { h: himmelAf([[0, '#02040c'], [0.6, '#061428'], [1, '#0e2a40']]), taage: 0x061a26, hav: 0x041820, sol: 0x9fb6ff, solI: 1.1, himI: 0.45 },
   };
+  // Træer og palmer står i store samlede net. Hvert træ findes som en sammenhængende klump punkter,
+  // så det kan fjernes alene, når et tårn bygges ovenpå. Nettet stilles tilbage ved hver ny bane.
+  let traeKlumper = [];
+  function traeOp() {
+    traeKlumper = [];
+    by.updateMatrixWorld(true);
+    by.traverse((o) => {
+      if (!o.isMesh || !/^(Palmer|Parker)/.test(o.name + ' ' + (o.parent?.name || ''))) return;
+      const geo = o.geometry, pos = geo.attributes.position;
+      if (!geo.userData.orig) geo.userData.orig = pos.array.slice();
+      else { pos.array.set(geo.userData.orig); pos.needsUpdate = true; }
+      if (!geo.userData.klumper) {
+        const n = pos.count, far = new Int32Array(n).map((_, i) => i);
+        const rod = (i) => { while (far[i] !== i) i = far[i] = far[far[i]]; return i; };
+        const idx = geo.index ? geo.index.array : null;
+        if (idx) for (let i = 0; i < idx.length; i += 3) { const a = rod(idx[i]), b = rod(idx[i + 1]), c = rod(idx[i + 2]); far[b] = a; far[rod(c)] = a; }
+        const kl = new Map(), v = new THREE.Vector3();
+        for (let i = 0; i < n; i++) { const r = rod(i); let k = kl.get(r); if (!k) kl.set(r, (k = { x: 0, z: 0, n: 0, i: [] })); v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); k.x += v.x; k.z += v.z; k.n++; k.i.push(i); }
+        geo.userData.klumper = [...kl.values()].map((k) => ({ x: k.x / k.n, z: k.z / k.n, i: k.i }));
+      }
+      traeKlumper.push({ o, geo });
+    });
+  }
+  function fjernTraeer(x, y) {
+    const cx = X(x), cz = Z(y), r = 30 * K;
+    for (const { geo } of traeKlumper) {
+      const pos = geo.attributes.position; let rort = false;
+      for (const k of geo.userData.klumper) {
+        if (Math.hypot(k.x - cx, k.z - cz) > r) continue;
+        const a = k.i[0];
+        for (const i of k.i) pos.setXYZ(i, pos.getX(a), pos.getY(a), pos.getZ(a));
+        rort = true;
+      }
+      if (rort) pos.needsUpdate = true;
+    }
+  }
   function oeOp() {                            // Færøerne i skumringen: hav hele vejen rundt, får, fugle, vandfald og tåge
-    const OH = OEHIMMEL[g.bane.oeTema]; HAVDYB = g.bane.havdyb || 3.2;
+    const st = g.bane.stil, hx = (f) => parseInt(f.slice(1), 16);
+    const OH = st ? { h: himmelAf(st.himmel), taage: hx(st.taage), hav: hx(st.hav), sol: hx(st.sol), solI: st.solI, himI: st.himI } : OEHIMMEL[g.bane.oeTema]; HAVDYB = g.bane.havdyb || 3.2;
     scene.background = OH ? OH.h : skumring; scene.fog = new THREE.Fog(OH ? OH.taage : 0x2a4356, 100, 330);
     sol.color.set(OH ? OH.sol : 0xffe0bb); sol.intensity = OH ? OH.solI : 2.5; himmellys.intensity = OH ? OH.himI : 0.75; himmellys.color.set(0x9fc0dc); scene.environmentIntensity = 0.5;
     if (g.bane.oeTema === 'lagune') vejrOp('tech');      // lysende plankton, der stiger op i natten
+    if (st?.vejr) vejrOp(st.vejr);                       // sne, kirsebærblade, lysprikker eller gløder fra vulkanen
     skygge.visible = false;
     by.traverse((o) => { if (/^Molen_net/.test(o.name)) o.visible = false; if (o.isMesh) { o.receiveShadow = true; if (/^(Fjerne|Sk)/.test(o.name)) o.castShadow = false; if ([].concat(o.material).some((m) => m.name === 'straale')) o.material = new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });} });      // fyrets stråle er svag og lysende, ikke en fast kegle
     const hav_ = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshBasicMaterial({ color: OH ? OH.hav : 0x0c2531 })); hav_.rotation.x = -Math.PI / 2; hav_.position.y = -HAVDYB; scene.add(hav_); natTing.push(hav_);
@@ -384,7 +424,74 @@ export function lavVisning(laerred, lag) {
     const rod = M[f.type].clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
     const v = { rod, krop: rod.getObjectByName('krop') || rod, benV: rod.getObjectByName('benV'), benH: rod.getObjectByName('benH'), armV: rod.getObjectByName('armV'), armH: rod.getObjectByName('armH'), vV: rod.getObjectByName('vingeV'), vH: rod.getObjectByName('vingeH'), fase: Math.random() * 6, foedt: tid,
       side: f.d.boss ? 0 : (Math.random() - 0.5) * 2 * Math.max(0, VEJ / 2 - (f.d.r || 8) - 5), takt: 0.85 + Math.random() * 0.3, vugge: 0.03 + Math.random() * 0.06 };      // hver sin plads på vejen og sin egen gang
+    v.p = pers(f.type); v.naeste = tid + (f.d.boss ? 1.2 : 2 + Math.random() * 7); v.akt = null;
     verden.add(rod); return v;
+  }
+  // ----- monstrenes sind: handlinger, talebobler og reaktioner (se sind.js) -----
+  const bobler = []; let sidsteBoble = 0, snakLyd = null;
+  function goer(v, navn, ekstra) { if (v && !v.doer) v.akt = { navn, t0: tid, sek: VARIGHED[navn] || 1, ...ekstra }; }
+  function sig(f, v, tekst, tving) {
+    if (!f || (!tving && (bobler.length >= 6 || tid - sidsteBoble < 0.3))) return;
+    if (bobler.some((b) => b.f === f)) return;
+    sidsteBoble = tid;
+    bobler.push({ f, x: f.x, y: f.y, h: ((f.d?.r || 10) > 15 ? 4.3 : 2.3) * (f.d?.str || 1) * FIG + (f.d?.luft ? 2.3 : 0), tekst, liv: 1.7, max: 1.7, stor: !!f.d?.boss });
+    if (snakLyd && v) snakLyd(v.p.stemme, Math.min(4, 1 + tekst.split(' ').length), f.d?.boss ? 1.4 : 1);
+  }
+  const naermeste = (liste, x, y, r, undtag) => liste.filter((f) => f !== undtag && Math.hypot(f.x - x, f.y - y) < r);
+  let alene = 0;
+  function sindSkridt(f, v, str) {
+    v.rod.rotation.x = 0;
+    if (g.fase === 'kamp' && !g.koe.length && g.fjender.length === 1 && alene !== g.boelge && tid - v.foedt > 2) {          // den sidste i bølgen opdager, at den er alene
+      alene = g.boelge; goer(v, 'kig', { vinkel: 1.2, sek: 2 }); sig(f, v, ['Hallo...?', 'Øh...', 'Gnuk?'][(Math.random() * 3) | 0], true);
+    }
+    if ((f.d.r || 10) >= 18 && Math.random() < 0.02) {          // de store skubber de små omkuld, når de går forbi
+      for (const x of naermeste(g.fjender, f.x, f.y, 26, f)) { const w = fjender.get(x.nr); if (w && !w.akt && (x.d.r || 10) < 12) { goer(w, 'snuble'); if (Math.random() < 0.5) sig(x, w, 'Hey!'); break; } }
+    }
+    if (!v.akt) {
+      if (f.brandT > 0 && Math.random() < 0.03) { goer(v, 'brand'); if (Math.random() < 0.4) sig(f, v, RAAB.brand[(Math.random() * 3) | 0]); }
+      else if (f.bremsT > 0 && Math.random() < 0.02) { goer(v, 'ryst'); if (Math.random() < 0.4) sig(f, v, RAAB.frost[(Math.random() * 3) | 0]); }
+      else if (tid > v.naeste) {
+        v.naeste = tid + (3 + Math.random() * 9) / Math.sqrt(v.p.snak);
+        let navn = vaelgHandling(v.p), ekstra = {};
+        if (navn === 'kig' && g.taarne.length) {          // kigger over på det nærmeste tårn
+          let t = null, bd = 1e9; for (const x of g.taarne) { const d = Math.hypot(x.x - f.x, x.y - f.y); if (d < bd) { bd = d; t = x; } }
+          let w = (Math.PI / 2 - Math.atan2(t.y - f.y, t.x - f.x)) - (Math.PI / 2 - f.v); while (w > Math.PI) w -= 2 * Math.PI; while (w < -Math.PI) w += 2 * Math.PI;
+          ekstra.vinkel = Math.max(-1.4, Math.min(1.4, w));
+        }
+        if (f.d.luft && navn !== 'loop' && navn !== 'vink') navn = 'loop';
+        const ven = !f.d.boss && Math.random() < 0.35 && naermeste(g.fjender, f.x, f.y, 45, f).find((x) => { const w = fjender.get(x.nr); return w && !w.akt && !x.d.boss; });
+        if (ven) {                                          // to monstre vender sig mod hinanden og snakker
+          const w = fjender.get(ven.nr), side = Math.sign(v.side - w.side) || 1;
+          goer(v, 'snak', { vinkel: 0.9 * side }); goer(w, 'snak', { vinkel: -0.9 * side });
+          sig(f, v, saetning(v.p), false); setTimeout(() => sig(ven, w, saetning(w.p)), 650);
+        } else {
+          goer(v, navn, ekstra);
+          const r = RAAB[navn];
+          if (Math.random() < (r ? 0.5 : 0.28) * v.p.snak) sig(f, v, r && Math.random() < 0.6 ? r[(Math.random() * r.length) | 0] : saetning(v.p));
+        }
+      }
+    }
+    pose(v, str, tid);
+  }
+  function sindHaendelse(e) {
+    if (!g) return;
+    if (e.a === 'klaret' || (e.a === 'doed' && FJENDER[e.type]?.boss)) for (const v of taarne.values()) v.jubel = tid + Math.random() * 0.5;
+    if (e.a === 'doed') {
+      let raabt = false;
+      for (const f of naermeste(g.fjender, e.x, e.y, 75)) {
+        const v = fjender.get(f.nr); if (!v || f.d.boss) continue;
+        const r = Math.random();
+        if (r < 0.12) { goer(v, 'grin'); if (Math.random() < 0.5) sig(f, v, RAAB.grin[(Math.random() * 3) | 0]); }       // nogle synes, det er sjovt
+        else if (r < 0.6) { goer(v, 'skraek'); if (!raabt && Math.random() < 0.45) { raabt = true; sig(f, v, RAAB.skraek[(Math.random() * 4) | 0]); } }
+      }
+    } else if (e.a === 'brag') {
+      for (const f of naermeste(g.fjender, e.x, e.y, e.r * 1.6)) { const v = fjender.get(f.nr); if (v && !f.d.boss && Math.random() < 0.5) goer(v, 'skraek'); }
+    } else if (e.a === 'frost') {
+      let raabt = false;
+      for (const f of naermeste(g.fjender, e.x, e.y, e.r)) { const v = fjender.get(f.nr); if (v && !v.akt && Math.random() < 0.3) { goer(v, 'ryst'); if (!raabt && Math.random() < 0.3) { raabt = true; sig(f, v, RAAB.frost[(Math.random() * 3) | 0]); } } }
+    } else if (e.a === 'laek' && e.x != null && Math.random() < 0.7) {
+      sig({ x: e.x, y: e.y, d: FJENDER[e.type] }, { p: pers(e.type) }, RAAB.laek[(Math.random() * 4) | 0], true);
+    }
   }
   // Trin 5 har sine egne dele (maskinen). Her vælges, hvilke dele bevægelserne skal bruge.
   function vaelgDele(v, trin) {
@@ -405,6 +512,7 @@ export function lavVisning(laerred, lag) {
 
   // ----- hændelser fra reglerne -----
   function haendelse(e) {
+    sindHaendelse(e);
     const v = e.t ? taarne.get(e.t) : null;
     if (e.a === 'spor' && v) {
       mundingen(v, a); b.set(X(e.x2), e.luft ? 2.6 : 0.7, Z(e.y2));
@@ -450,7 +558,8 @@ export function lavVisning(laerred, lag) {
       for (let i = 0; i < (d.boss ? 16 : 4); i++) { const w = Math.random() * 6.28, s = 2 + Math.random() * 4; gnist(a, Math.cos(w) * s, 2 + Math.random() * 4, Math.sin(w) * s, 0.35, ROED, 0.12, 0.02); }
       if (e.n) tekst(e.x, e.y, 2.1 * d.str, '+' + e.n);
     } else if (e.a === 'tjen') tekst(e.x, e.y, 3.4, '+' + e.n, 'rgba(92,255,156,.95)');
-    else if (e.a === 'byg' || e.a === 'op') ringFx(e.x, e.y, e.a === 'op' ? 34 : 26, 0xffffff, 0.4, 0.7);
+    if (e.a === 'byg') fjernTraeer(e.x, e.y);
+    if (e.a === 'byg' || e.a === 'op') ringFx(e.x, e.y, e.a === 'op' ? 34 : 26, 0xffffff, 0.4, 0.7);
     else if (e.a === 'salg') { a.set(X(e.x), 0.8, Z(e.y)); gnist(a, 0, 2, 0, 0.25, 0xffffff, 0.3, 1.1, 0.35); }
     else if (e.a === 'enhedskud') { a.set(X(e.x1), 0.9, Z(e.y1)); b.set(X(e.x2), 0.7, Z(e.y2)); streg(a, b, 0.06, 0xfff1d0, 0.08); gnist(b, 0, 2, 0, 0.18, 0xffc45a, 0.18, 0.03); }
     else if (e.a === 'stoed') { a.set(X(e.x), 0.8, Z(e.y)); gnist(a, 0, 2, 0, 0.14, 0xffffff, 0.15, 0.5, 0.7); }
@@ -592,6 +701,7 @@ export function lavVisning(laerred, lag) {
     by?.removeFromParent(); by = null; byLiv = []; byHjul = [];
     if (g.bane.by) {                           // en rigtig by omkring vejen; byens eget rådhus er skansen
       by = M[g.bane.by]; scene.add(by); if (g.bane.oe) oeOp(); else natOp();
+      traeOp();
       byLiv = (g.bane.liv || []).map((l) => ({ ...l, o: by.getObjectByName(l.knude) })).filter((l) => l.o);
       byHjul = []; by.traverse((o) => { if (o.name.startsWith('spin')) byHjul.push(o); });
       borg = new THREE.Group();
@@ -687,7 +797,7 @@ export function lavVisning(laerred, lag) {
         else if (art !== 'lyn') v.vaaben.position.z -= ryk * (t.id === 'skytte' || t.id === 'skinne' ? 0.22 : 0.1);
       }
       // bevægelser: hop og en omgang rundt ved opgradering, fald ned ved placering, arme der rykker, hoved der ser sig om
-      const u = 0, hop = 0, fald = Math.max(0, 1 - alder / 0.22);
+      const jq = v.jubel ? (tid - v.jubel) / 0.6 : -1, u = jq > 0 && jq < 1 ? jq : 0, hop = u ? Math.sin(Math.PI * u) * 0.32 : 0, fald = Math.max(0, 1 - alder / 0.22);      // jubel: hop med armene i vejret
       v.rod.position.y = (t.hoej || 0) + hop * 1.1 + fald * fald * 4;
       if (hop && v.sk && v.drej) v.drej.rotation.y = v.vinkel + u * u * (3 - 2 * u) * Math.PI * 2;
       if (t.skudT !== v.sidstSkud) { v.sidstSkud = t.skudT; v.rykAmp = 0.65 + Math.random() * 0.7; v.rykSide = (Math.random() - 0.5) * 0.12; }
@@ -764,6 +874,12 @@ export function lavVisning(laerred, lag) {
         if (fjende && f.d.luft) { const slag = Math.sin(tid * 14 + v.fase); v.rod.position.y = 2.1 + Math.sin(tid * 2 + v.fase) * 0.25; if (v.vV) { v.vV.rotation.y = -slag * 0.7; v.vH.rotation.y = slag * 0.7; } v.rod.rotation.z = 0; }
         const ramt = fjende ? Math.max(0, 1 - (g.t - (f.ramtT ?? -9)) / 0.1) : 0;
         v.rod.scale.setScalar(str * Math.min(1, (tid - v.foedt) / 0.2 + 0.3) * (1 - ramt * 0.08));
+        if (fjende) {
+          if (f.d.boss && !v.broelt && tid - v.foedt > 0.8) { v.broelt = true; goer(v, 'broel'); sig(f, v, saetning(v.p), true);          // chefen melder sin ankomst, og de små bliver nervøse
+            for (const x of naermeste(g.fjender, f.x, f.y, 110, f)) { const w = fjender.get(x.nr); if (w && Math.random() < 0.5) goer(w, 'skraek'); } }
+          if (ramt > 0.95 && !v.akt && Math.random() < 0.004) sig(f, v, RAAB.ramt[(Math.random() * 3) | 0]);
+          sindSkridt(f, v, str);
+        }
       }
       for (const [nr, v] of kort) if (!set.has(nr)) { kort.delete(nr); if (v.doer) { v.d = 0; v.s0 = v.rod.scale.x; doende.push(v); } else v.rod.removeFromParent(); }
     }
@@ -817,9 +933,24 @@ export function lavVisning(laerred, lag) {
       const [x, y] = paaSkaerm(t.x, t.y, t.h); k2.globalAlpha = Math.min(1, t.liv * 2.5); k2.fillStyle = t.farve; k2.fillText(t.t, x, y - (0.9 - t.liv) * 26);
     }
     k2.globalAlpha = 1;
+    // talebobler: hvide, runde, med en lille hale ned mod den, der taler
+    for (let i = bobler.length - 1; i >= 0; i--) {
+      const b_ = bobler[i]; b_.liv -= dt; if (b_.liv <= 0) { bobler.splice(i, 1); continue; }
+      if (g.fjender.includes(b_.f)) { b_.x = b_.f.x; b_.y = b_.f.y; }
+      const [x, y] = paaSkaerm(b_.x, b_.y, b_.h), q = 1 - b_.liv / b_.max, ind_ = Math.min(1, q / 0.08);
+      k2.font = b_.stor ? '800 17px -apple-system, system-ui, sans-serif' : '700 12.5px -apple-system, system-ui, sans-serif';
+      const w = k2.measureText(b_.tekst).width + (b_.stor ? 22 : 16), hh = b_.stor ? 30 : 24, by = y - hh - 10 - q * 8;
+      k2.globalAlpha = Math.min(1, b_.liv * 3) * ind_;
+      k2.save(); k2.translate(x, by + hh); k2.scale(0.6 + 0.4 * ind_, 0.6 + 0.4 * ind_); k2.translate(-x, -(by + hh));
+      k2.fillStyle = 'rgba(255,255,255,.94)'; k2.beginPath(); k2.roundRect(x - w / 2, by, w, hh, hh / 2); k2.fill();
+      k2.beginPath(); k2.moveTo(x - 5, by + hh - 1); k2.lineTo(x, by + hh + 7); k2.lineTo(x + 5, by + hh - 1); k2.fill();
+      k2.fillStyle = b_.stor ? '#b0101a' : '#111'; k2.textAlign = 'center'; k2.textBaseline = 'middle'; k2.fillText(b_.tekst, x, by + hh / 2 + 0.5);
+      k2.restore();
+    }
+    k2.globalAlpha = 1; k2.textBaseline = 'alphabetic';
   }
 
-  return { scene_: scene, saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, saetDiorama: (v) => { diorama = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
+  return { scene_: scene, naarSnak: (fn) => { snakLyd = fn; }, saetSpil, tegn, haendelse, tilFelt, spoegelse, vaelg, stoerrelse, rul, zoomTrin, kig, paaSkaerm, drej, flyt, ligeUd, grafik, saetOutfits: (o) => { outfits = o || {}; }, saetSkarp: (v) => { if (skarp !== v) { skarp = v; stoerrelse(); } }, saetGlid: (v) => { bloedt = v; }, saetDiorama: (v) => { diorama = v; }, skygger: (paa) => { renderer.shadowMap.enabled = paa; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); } };
 }
 
 // Et tårn som færdig figur med trin, outfit og pynt, som i spillet. Bruges til kataloget i Form.

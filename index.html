@@ -15,7 +15,7 @@
     <b class="logo">Tower</b>
     <nav class="faner glas" id="faner">
       <i class="markoer" id="markoer"></i>
-      <button data-s="0">Spil</button><button data-s="1">Online</button><button data-s="2">Arsenal</button><button data-s="3">Garderobe</button><button data-s="4">Butik</button><button data-s="5">Indstillinger</button>
+      <button data-s="0">Start</button><button data-s="1">Spil</button><button data-s="2">Beta</button><button data-s="3">Shop</button><button data-s="4">Garderobe</button><button data-s="5">Butik</button><button data-s="6">Indstillinger</button>
     </nav>
     <span class="luft"></span>
     <button class="pille glas profil" id="profil"><span class="prik" id="ejerprik"></span><b id="navnvis"></b></button>
@@ -23,10 +23,26 @@
   </header>
   <div class="spor" id="spor">
 
+    <div class="flade" data-navn="start">
+      <div class="start">
+        <div class="startv">
+          <span class="hilsen_" id="sHilsen"></span>
+          <h1 class="startlogo">Tower</h1>
+          <div class="startknapper"><button class="knap hvid stor" id="sSpil"></button><button class="knap glas" id="sBaner">Alle baner</button></div>
+          <div class="starttal" id="sTal"></div>
+          <button class="naestebane glas" id="sNaeste"></button>
+        </div>
+        <div class="starth">
+          <canvas id="skive3"></canvas>
+          <div class="startbutik" id="sButik"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="flade" data-navn="spil">
       <div class="midt">
         <div class="vaelger svaervalg" id="svaer"></div>
-        <div class="baner" id="baner"></div>
+        <div class="baner rul" id="baner"></div>
         <div class="bund">
           <div class="udstyr glas" id="udstyr"></div>
           <button class="knap hvid stor" id="spil">Spil</button>

@@ -72,6 +72,7 @@ const L = {
   salg: [0, () => akkord([880, 660], 0.14, 'sine', 0.3, 0.07, 0.3)],
   tjen: [60, () => { tone(1320, 1320, 0.12, 'sine', 0.2, 0.5); tone(1760, 1760, 0.2, 'sine', 0.16, 0.5, 0.004, 0.07); }],
   klik: [0, () => tone(900, 640, 0.04, 'sine', 0.22)],
+  nej: [0, () => { tone(260, 220, 0.07, 'triangle', 0.25); tone(200, 170, 0.09, 'triangle', 0.25, 0.5, 0.003, 0.08); }],
   angreb: [300, () => { tone(392, 392, 0.18, 'square', 0.18, 0.5); tone(311, 311, 0.3, 'square', 0.18, 0.5, 0.003, 0.15); }],
   // bølger og slutninger
   boelge: [0, () => { for (const f of [110, 165, 220]) tone(f, f * 1.004, 1.1, 'sawtooth', 0.14, 0.7, 0.18); sus(1.0, 400, 0.12, 0.5, 0.6, 'lowpass'); }],
@@ -92,6 +93,23 @@ const KLANG = {
   nat: [60, () => tone(90, 45, 0.1, 'sine', 0.25)],
   kbh: [80, () => tone(988, 988, 0.08, 'square', 0.04)],
 };
+// Monstrenes eget sprog: korte stavelser gennem to formantfiltre (en mund, der åbner og lukker). Små monstre har lyse stemmer.
+const VOKAL = [[730, 1090], [270, 2290], [300, 870], [530, 1840], [570, 840], [400, 1600]];
+export function pludre(hoejde = 1, n = 2, styrke = 1) {
+  if (!paa || !klar()) return;
+  const nu = performance.now(); if (nu - (sidst.pludre || 0) < 240) return; sidst.pludre = nu;
+  if (ac.state === 'suspended') ac.resume();
+  let t = ac.currentTime + 0.01;
+  for (let i = 0; i < n; i++) {
+    const d = 0.06 + Math.random() * 0.1, f0 = 150 * hoejde * lidt(0.2), v = VOKAL[(Math.random() * VOKAL.length) | 0];
+    const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (Math.random() < 0.5 ? 1.3 : 0.78), t + d);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.09 * styrke, t + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t + d);
+    for (const F of v) { const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = F * (0.85 + Math.min(hoejde, 2) * 0.15); f.Q.value = 5; o.connect(f).connect(g); }
+    g.connect(ud); const k = ac.createGain(); k.gain.value = 0.25; g.connect(k).connect(rum);
+    o.start(t); o.stop(t + d + 0.02); t += d + 0.015 + Math.random() * 0.05;
+  }
+}
 export function spil(navn, tema) {
   if (tema && KLANG[tema] && paa && klar()) { const k = KLANG[tema], nu = performance.now(); if (nu - (sidst['k' + tema] || 0) > k[0]) { sidst['k' + tema] = nu; faktor = KLANG_STYRKE; k[1](); faktor = 1; } }
   const l = L[navn] || (navn.startsWith('spor_') ? L.spor_vagt : null); if (!l || !paa || !klar()) return;
@@ -148,6 +166,7 @@ export async function optag(navn, tema, sek = 1.5) {
   rum = ac.createConvolver(); rum.buffer = b; const rg = ac.createGain(); rg.gain.value = 0.5; rum.connect(rg).connect(ud);
   try {
     if (navn.startsWith('stemning:')) saetStemning(navn.slice(9));
+    else if (navn.startsWith('pludre:')) { sidst.pludre = 0; pludre(+navn.slice(7), 3); }
     else { if (tema && KLANG[tema]) { faktor = KLANG_STYRKE; KLANG[tema][1](); } faktor = NIVEAU[navn] || 1; if (L[navn]) L[navn][1](); faktor = 1; }
     const buf = await off.startRendering();
     if (stemning) clearInterval(stemning.ur);

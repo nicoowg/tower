@@ -162,7 +162,7 @@ export function lavOnline(api) {
   function side(el) {
     const T = lobby && TILSTANDE[lobby.tilstand];
     if (!lobby) {
-      el.innerHTML = `<h2>Online</h2>
+      el.innerHTML = `<h2>Online <span class="beta">Beta</span></h2>
         <div class="tilstande">${Object.entries(TILSTANDE).map(([k, t]) => `<button class="tilstand ${valgtTilstand === k ? 'paa' : ''}" data-t="${k}"><b>${k === 'alle' ? 'Alle' : k}</b><span>${t.navn}</span></button>`).join('')}</div>
         <button class="knap hvid stor" id="opret" ${status || !api.tilladt() ? 'disabled' : ''}>${status || (api.tilladt() ? 'Opret lobby' : 'Online er slået fra')}</button>
         <div class="feltlinje"><input id="kode" maxlength="5" placeholder="Kode" spellcheck="false" autocomplete="off"><button class="knap glas" id="join" ${status ? 'disabled' : ''}>Join</button></div>

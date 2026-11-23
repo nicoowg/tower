@@ -5,6 +5,16 @@ import neon from './by_neon.js';
 import faero from './by_faero.js';
 import miami from './by_miami.js';
 import lagune from './by_lagune.js';
+import solskin from './by_solskin.js';
+import flamingo from './by_flamingo.js';
+import neonnat from './by_neonnat.js';
+import vulkan from './by_vulkan.js';
+import sakura from './by_sakura.js';
+import polar from './by_polar.js';
+import jungle from './by_jungle.js';
+import maane from './by_maane.js';
+import pirat from './by_pirat.js';
+import atol from './by_atol.js';
 
 // Alt, der kan justeres uden at røre reglerne: tårne, fjender, bølger og baner.
 // Mål er i banens egne enheder: banen er 1600 x 900.
@@ -122,13 +132,25 @@ function paaLand(vej, land, ind = 40) {
   return klip(klip(vej).reverse()).reverse();
 }
 const oe = (d) => ({ punkter: paaLand(d.vej, d.land), bro: [] });
+// Banerne i den rækkefølge, de låses op. Byerne: model/byplan.py + model/by.py. Øerne: model/tropeplan.py + model/trope.py,
+// Færøerne: model/faero_plan.py + model/oe.py. Næste bane åbner, når man har klaret LAAS_BOELGE bølger på den forrige.
+export const LAAS_BOELGE = 15;
 export const BANER = [
-  // Byerne: planerne laves af model/byplan.py, og selve byen bygges af model/by.py
   { id: 'kbh', navn: 'København', punkter: kbh.vej, by: 'by_kbh', ...kbh },
+  { id: 'solskin', navn: 'Solskinsøen', by: 'by_solskin', ...solskin, ...oe(solskin) },
+  { id: 'miami', navn: 'Miami', by: 'by_miami', ...miami, ...oe(miami) },
   { id: 'tokyo', navn: 'Tokyo', punkter: tokyo.vej, by: 'by_tokyo', ...tokyo },
-  { id: 'nordlys', navn: 'Nordlys', punkter: nordlys.vej, by: 'by_nordlys', ...nordlys },
-  { id: 'neon', navn: 'Neon', punkter: neon.vej, by: 'by_neon', ...neon },
-  { id: 'miami', navn: 'Miami', by: 'by_miami', ...miami, ...oe(miami) },          // tropiske øer: model/tropeplan.py og model/trope.py
+  { id: 'flamingo', navn: 'Flamingobugten', by: 'by_flamingo', ...flamingo, ...oe(flamingo) },
+  { id: 'jungle', navn: 'Junglelagunen', by: 'by_jungle', ...jungle, ...oe(jungle) },
   { id: 'lagune', navn: 'Månelagunen', by: 'by_lagune', ...lagune, ...oe(lagune) },
-  { id: 'faero', navn: 'Færøerne', by: 'by_faero', ...faero, ...oe(faero) },          // en ø: planen laves af model/faero_plan.py, øen bygges af model/oe.py
+  { id: 'nordlys', navn: 'Nordlys', punkter: nordlys.vej, by: 'by_nordlys', ...nordlys },
+  { id: 'atol', navn: 'Atollen', by: 'by_atol', ...atol, ...oe(atol) },
+  { id: 'sakura', navn: 'Kirsebærøen', by: 'by_sakura', ...sakura, ...oe(sakura) },
+  { id: 'faero', navn: 'Færøerne', by: 'by_faero', ...faero, ...oe(faero) },
+  { id: 'maane', navn: 'Måneskinsbugten', by: 'by_maane', ...maane, ...oe(maane) },
+  { id: 'neon', navn: 'Neon', punkter: neon.vej, by: 'by_neon', ...neon },
+  { id: 'pirat', navn: 'Piratbugten', by: 'by_pirat', ...pirat, ...oe(pirat) },
+  { id: 'polar', navn: 'Polarøen', by: 'by_polar', ...polar, ...oe(polar) },
+  { id: 'neonnat', navn: 'Neonstranden', by: 'by_neonnat', ...neonnat, ...oe(neonnat) },
+  { id: 'vulkan', navn: 'Vulkanøen', by: 'by_vulkan', ...vulkan, ...oe(vulkan) },
 ];
