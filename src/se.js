@@ -996,7 +996,10 @@ export function lavFremviser(laerred) {
   const kant = new THREE.DirectionalLight(0xff4a4a, 1.4); kant.position.set(4, 3, -6); scene.add(kant);
   const gulv = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.45 })); gulv.rotation.x = -Math.PI / 2; gulv.receiveShadow = true; scene.add(gulv);
   const kamera = new THREE.PerspectiveCamera(28, 1, 0.5, 60);
-  let figur = null, spin = null, hoved = null, sk = null, v = 0.6, tid = 0, senest = '';
+  let figur = null, spin = null, hoved = null, sk = null, v = -0.55, maalV = -0.55, tid = 0, senest = '', traek = null;
+  laerred.addEventListener('pointerdown', (e) => { traek = { x: e.clientX, v }; laerred.setPointerCapture?.(e.pointerId); });
+  laerred.addEventListener('pointermove', (e) => { if (traek) { v = traek.v + (e.clientX - traek.x) * 0.012; maalV = v; } });
+  addEventListener('pointerup', () => { traek = null; });
   function vis(id, trin = 0, temaId = 'std') {
     const hm = helt(id, temaId);
     if (!hm && M[heltNoegle(id, temaId)] === undefined) hentHelt(id, temaId).then((m) => { if (m && senest === `${id}:${trin}:${temaId}`) vis(id, trin, temaId); });
@@ -1013,8 +1016,13 @@ export function lavFremviser(laerred) {
     if (!figur) return;
     const b = laerred.clientWidth, h = laerred.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
     if (laerred.width !== Math.round(b * dpr) || laerred.height !== Math.round(h * dpr)) { renderer.setPixelRatio(dpr); renderer.setSize(b, h, false); kamera.aspect = b / h; kamera.updateProjectionMatrix(); }
-    v += dt * 0.5; tid += dt; figur.rotation.y = v; spin?.rotateY(dt * 1.2); pyntSkridt(figur, tid);
-    if (hoved) hoved.rotation.y = Math.sin(tid * 0.9) * 0.45;
+    // figuren står og lever: vugger let, trækker vejret, kigger sig om. Træk med musen for at dreje den selv.
+    tid += dt; if (!traek) v += (maalV - v) * Math.min(1, dt * 3);
+    const vug = Math.sin(tid * 0.45) * 0.22 + Math.sin(tid * 0.17) * 0.12;
+    figur.rotation.y = v + (traek ? 0 : vug); spin?.rotateY(dt * 1.2); pyntSkridt(figur, tid);
+    figur.scale.y = 1 + Math.sin(tid * 1.9) * 0.006;                 // vejrtrækning
+    const drej_ = figur.getObjectByName('drej'); if (drej_) drej_.rotation.z = Math.sin(tid * 0.8) * 0.02;
+    if (hoved) { const kig = Math.sin(tid * 0.6) * 0.5 + (Math.sin(tid * 0.13) > 0.7 ? 0.35 : 0); hoved.rotation.y += (kig - hoved.rotation.y) * Math.min(1, dt * 2.5); hoved.rotation.x = Math.sin(tid * 0.9) * 0.05; }
     if (sk) sk.rotation.x = Math.sin(tid * 1.7) * 0.05;
     renderer.render(scene, kamera);
   }

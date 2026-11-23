@@ -113,6 +113,9 @@ export const BOELGER = [
 
 // Flyvere blandes ind i bølgerne fra bølge 6. Dem kan kun nogle tårne ramme.
 for (const [w, n] of [[6, 5], [9, 8], [12, 10], [14, 12], [17, 16], [19, 18], [22, 22], [24, 26], [27, 30], [29, 36]]) BOELGER[w - 1].push(g('flyver', n, 0.6, 1));
+// bløde toppe: bølge 6, 17 og 20 kræver stadig den rigtige plan, men er ikke en mur
+const tilpas = (w, type, n) => { const x = BOELGER[w - 1].find((e) => e[0] === type); if (x) x[1] = n; };
+tilpas(6, 'loeber', 7); tilpas(17, 'svaerm', 46); tilpas(17, 'flyver', 12); tilpas(20, 'panser', 9);
 
 // Vejen fra indgang til skanse som hjørnepunkter. Hjørnerne rundes af i sim.js.
 // På øerne starter vejen et stykke inde på land, så intet stikker ud over havet.

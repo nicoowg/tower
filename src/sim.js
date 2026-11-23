@@ -12,12 +12,12 @@ export function tagVed(bane, x, y) { for (const [x0, y0, x1, y1, h] of bane.tage
 // De tårne, der kan ramme flyvende fjender. Resten skyder eller kaster langs jorden.
 export const LUFT = new Set(['skud', 'drone', 'vogn', 'lyn', 'skinne', 'straale']);
 export const DRONEBANE = 70;
-const hpFaktor = (w) => Math.pow(1.07, w - 1);
+const hpFaktor = (w) => Math.pow(1.062, w - 1);          // fjenderne bliver 6,2 % stærkere pr. bølge: jævnt op, ingen mur ved bølge 20
 // Sværhedsgraderne: hvor mange bølger, hvor stærke fjenderne er, og hvad man starter med. Et spil tager cirka 15-30 minutter.
 export const SVAER = {
-  let: { navn: 'Let', boelger: 20, hp: 0.6, penge: 1000, liv: 200, moenter: 0.7 },
-  normal: { navn: 'Normal', boelger: 30, hp: 1, penge: 700, liv: 100, moenter: 1 },
-  svaer: { navn: 'Svær', boelger: 30, hp: 1.3, penge: 600, liv: 75, moenter: 1.4 },
+  let: { navn: 'Let', boelger: 20, hp: 0.65, penge: 1000, liv: 200, moenter: 0.7 },
+  normal: { navn: 'Normal', boelger: 30, hp: 0.9, penge: 750, liv: 100, moenter: 1 },
+  svaer: { navn: 'Svær', boelger: 30, hp: 1.4, penge: 600, liv: 70, moenter: 1.4 },
   mareridt: { navn: 'Mareridt', boelger: 30, hp: 1.7, penge: 500, liv: 50, moenter: 2 },
 };
 const dusoerFaktor = (w) => 1 + 0.045 * (w - 1);

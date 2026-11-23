@@ -13,6 +13,7 @@ export const TEMAER = [
   { id: 'krom', navn: 'Krom', pris: 2000, k1: '#c9ccd4', k2: '#8a8f9a', moenster: ['boerste', 3, 0.3], metal: '#d9dde4', blank: 1, lys: '#bfe9ff' },
   { id: 'neon', navn: 'Neon', pris: 2500, k1: '#0f0f18', k2: '#1a1a28', moenster: ['fiber', 4, 0.45], lys: '#ff2d9a', gloed: '#2df0ff', metal: '#15151f' },
   { id: 'lava', navn: 'Lava', pris: 3000, k1: '#1b1012', k2: '#2a1414', moenster: ['skael', 2.4, 0.5], lys: '#ff6a1a', gloed: '#ff4a10', metal: '#1a1214' },
+  { id: 'hellerup', navn: 'Hellerup', pris: 3500, k1: '#1c2a44', k2: '#e8dcc2', moenster: ['twill', 4, 0.3], metal: '#c9a24a', lys: '#fff3d6' },
   { id: 'guld', navn: 'Guld', pris: 4000, k1: '#e3a93f', k2: '#f3d38a', moenster: ['quilt', 1.8, 0.35], metal: '#ffcf6a', blank: 1, lys: '#fff3d6' },
 ];
 const T = Object.fromEntries(TEMAER.map((t) => [t.id, t]));
