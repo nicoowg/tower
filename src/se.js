@@ -18,12 +18,17 @@ const ROED = 0xdb242e, ORANGE = 0xff9e33;
 
 export async function hentModeller(fremskridt) {
   const l = new GLTFLoader(); let n = 0;
-  await Promise.all(NAVNE.map(async (navn) => {
+  // de nye monstre: tre udgaver af hver type (model/helte/monstre.py). Mangler en, bruges den gamle.
+  const nye = Object.keys(FJENDER).flatMap((t) => [0, 1, 2].map((v) => [t, v]));
+  const monstre = Promise.all(nye.map(async ([t, v]) => {
+    try { const g = await l.loadAsync(`model/monster/${t}_${v}.glb`); g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); klaedHelt(g.scene); M[`monster:${t}:${v}`] = g.scene; } catch {}
+  }));
+  await Promise.all([monstre, ...NAVNE.map(async (navn) => {
     const g = await l.loadAsync(`model/${navn}.glb`);
     g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
     klaed(navn, g.scene);
     M[navn] = g.scene; fremskridt?.(++n / NAVNE.length);
-  }));
+  })]);
 }
 
 // De nye helte: én model pr. tårn og outfit (model/helte/spil.py). Hentes, når de skal bruges.
@@ -437,8 +442,8 @@ export function lavVisning(laerred, lag) {
     verden.add(rod); return v;
   }
   function lavFjende(f) {
-    const rod = (f.model || M[f.type]).clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
-    const v = { rod, krop: rod.getObjectByName('krop') || rod, benV: rod.getObjectByName('benV'), benH: rod.getObjectByName('benH'), armV: rod.getObjectByName('armV'), armH: rod.getObjectByName('armH'), vV: rod.getObjectByName('vingeV'), vH: rod.getObjectByName('vingeH'), fase: Math.random() * 6, foedt: tid,
+    const rod = (f.model || M[`monster:${f.type}:${(f.nr || 0) % 3}`] || M[f.type]).clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
+    const v = { rod, krop: rod.getObjectByName('krop') || rod, benV: rod.getObjectByName('benV'), benH: rod.getObjectByName('benH'), armV: rod.getObjectByName('armV'), armH: rod.getObjectByName('armH'), vV: rod.getObjectByName('vingeV'), vH: rod.getObjectByName('vingeH'), hoved: rod.getObjectByName('hoved'), hale: rod.getObjectByName('hale'), fase: Math.random() * 6, foedt: tid,
       side: f.d.boss ? 0 : (Math.random() - 0.5) * 2 * Math.max(0, VEJ / 2 - (f.d.r || 8) - 5), takt: 0.85 + Math.random() * 0.3, vugge: 0.03 + Math.random() * 0.06 };      // hver sin plads på vejen og sin egen gang
     v.p = pers(f.type); v.naeste = tid + (f.d.boss ? 1.2 : 2 + Math.random() * 7); v.akt = null;
     verden.add(rod); return v;
@@ -887,6 +892,8 @@ export function lavVisning(laerred, lag) {
         v.rod.rotation.z = Math.sin(v.fase) * v.vugge;
         if (v.benV) { v.benV.rotation.x = Math.sin(v.fase) * 0.7; v.benH.rotation.x = -Math.sin(v.fase) * 0.7; }
         if (v.armV) { v.armV.rotation.x = -Math.sin(v.fase) * 0.45; v.armH.rotation.x = Math.sin(v.fase) * 0.45; }
+        if (v.hoved) { v.hoved.rotation.x = Math.sin(v.fase * 2) * 0.07; v.hoved.rotation.y = Math.sin(v.fase * 0.5 + v.side) * 0.15; }      // hovedet nikker i takt med skridtene og kigger lidt rundt
+        if (v.hale) v.hale.rotation.y = Math.sin(v.fase * 1.3) * 0.35;                                                                    // halen svinger
         if (fjende && f.d.luft) { const slag = Math.sin(tid * 14 + v.fase); v.rod.position.y = 2.1 + Math.sin(tid * 2 + v.fase) * 0.25; if (v.vV) { v.vV.rotation.y = -slag * 0.7; v.vH.rotation.y = slag * 0.7; } v.rod.rotation.z = 0; }
         const ramt = fjende ? Math.max(0, 1 - (g.t - (f.ramtT ?? -9)) / 0.1) : 0;
         v.rod.scale.setScalar(str * Math.min(1, (tid - v.foedt) / 0.2 + 0.3) * (1 - ramt * 0.08));
