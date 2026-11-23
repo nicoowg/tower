@@ -10,7 +10,7 @@ function klar() {
   if (ac) return true;
   try {
     ac = new AudioContext();
-    const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; tryk.connect(ac.destination);
+    const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; const graense = ac.createDynamicsCompressor(); graense.threshold.value = -4; graense.knee.value = 0; graense.ratio.value = 20; graense.attack.value = 0.001; graense.release.value = 0.12; const loft = ac.createGain(); loft.gain.value = 0.82; tryk.connect(graense).connect(loft).connect(ac.destination);
     ud = ac.createGain(); ud.gain.value = 0.85; ud.connect(tryk);
     // et rum at klinge i: støj, der dør ud
     const l = ac.sampleRate * 1.8, b = ac.createBuffer(2, l, ac.sampleRate);
@@ -141,7 +141,7 @@ export async function optag(navn, tema, sek = 1.5) {
   const gl = { ac, ud, rum, stoej, paa, stemning };
   const sr = 44100, off = new OfflineAudioContext(2, Math.round(sr * sek), sr);
   ac = off; stoej = null; paa = true; stemning = null;
-  const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; tryk.connect(ac.destination);
+  const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; const graense = ac.createDynamicsCompressor(); graense.threshold.value = -4; graense.knee.value = 0; graense.ratio.value = 20; graense.attack.value = 0.001; graense.release.value = 0.12; const loft = ac.createGain(); loft.gain.value = 0.82; tryk.connect(graense).connect(loft).connect(ac.destination);
   ud = ac.createGain(); ud.gain.value = 0.85; ud.connect(tryk);
   const l = sr * 1.8, b = ac.createBuffer(2, l, sr);
   for (let k = 0; k < 2; k++) { const d = b.getChannelData(k); for (let i = 0; i < l; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / l, 2.6); }
@@ -155,3 +155,36 @@ export async function optag(navn, tema, sek = 1.5) {
   } finally { ({ ac, ud, rum, stoej, paa, stemning } = gl); }
 }
 export const LYDE = () => Object.keys(L);
+
+// Optager en hel kamp uden højttaler: hændelserne [{t, navn, tema}] spilles på deres tidspunkt oven i baggrundslyden.
+// Giver lyden og hvor meget kompressoren måtte dæmpe undervejs (til at måle, om det bliver for højt og rodet).
+export async function optagKamp(haendelser, sek, stemning_ = 'by') {
+  const gl = { ac, ud, rum, stoej, paa, stemning };
+  const sr = 44100, off = new OfflineAudioContext(2, Math.round(sr * sek), sr);
+  ac = off; stoej = null; paa = true; stemning = null;
+  const tryk = ac.createDynamicsCompressor(); tryk.threshold.value = -16; tryk.ratio.value = 5; const graense = ac.createDynamicsCompressor(); graense.threshold.value = -4; graense.knee.value = 0; graense.ratio.value = 20; graense.attack.value = 0.001; graense.release.value = 0.12; const loft = ac.createGain(); loft.gain.value = 0.82; tryk.connect(graense).connect(loft).connect(ac.destination);
+  ud = ac.createGain(); ud.gain.value = 0.85; ud.connect(tryk);
+  const l = sr * 1.8, b = ac.createBuffer(2, l, sr);
+  for (let k = 0; k < 2; k++) { const d = b.getChannelData(k); for (let i = 0; i < l; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / l, 2.6); }
+  rum = ac.createConvolver(); rum.buffer = b; const rg = ac.createGain(); rg.gain.value = 0.5; rum.connect(rg).connect(ud);
+  const daemp = [], vindue = 0.1, sidstLokal = {};
+  try {
+    saetStemning(stemning_);
+    for (let t = vindue; t < sek - 0.05; t += vindue) {
+      const fra = t - vindue, her = haendelser.filter((h) => h.t >= fra && h.t < t);
+      off.suspend(t).then(() => {
+        daemp.push(tryk.reduction);
+        for (const h of her) {                     // samme regler for hvor tit en lyd må gentages som i spillet
+          const l_ = L[h.navn] || (h.navn.startsWith('spor_') ? L.spor_vagt : null); if (!l_) continue;
+          if (t * 1000 - (sidstLokal[h.navn] || -1e9) < l_[0]) continue; sidstLokal[h.navn] = t * 1000;
+          if (h.tema && KLANG[h.tema] && t * 1000 - (sidstLokal['k' + h.tema] || -1e9) > KLANG[h.tema][0]) { sidstLokal['k' + h.tema] = t * 1000; faktor = KLANG_STYRKE; KLANG[h.tema][1](); }
+          faktor = NIVEAU[h.navn] || 1; l_[1](); faktor = 1;
+        }
+        off.resume();
+      });
+    }
+    const buf = await off.startRendering();
+    if (stemning) clearInterval(stemning.ur);
+    return { l: buf.getChannelData(0), r: buf.getChannelData(1), daemp };
+  } finally { ({ ac, ud, rum, stoej, paa, stemning } = gl); }
+}

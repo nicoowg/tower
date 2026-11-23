@@ -241,10 +241,10 @@ export function lavVisning(laerred, lag) {
     sol.color.set(OH ? OH.sol : 0xffe0bb); sol.intensity = OH ? OH.solI : 2.5; himmellys.intensity = OH ? OH.himI : 0.75; himmellys.color.set(0x9fc0dc); scene.environmentIntensity = 0.5;
     if (g.bane.oeTema === 'lagune') vejrOp('tech');      // lysende plankton, der stiger op i natten
     skygge.visible = false;
-    by.traverse((o) => { if (o.isMesh) { o.receiveShadow = true; if (/^(Fjerne|Sk)/.test(o.name)) o.castShadow = false; if ([].concat(o.material).some((m) => m.name === 'straale')) o.material = new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });} });      // fyrets stråle er svag og lysende, ikke en fast kegle
+    by.traverse((o) => { if (/^Molen_net/.test(o.name)) o.visible = false; if (o.isMesh) { o.receiveShadow = true; if (/^(Fjerne|Sk)/.test(o.name)) o.castShadow = false; if ([].concat(o.material).some((m) => m.name === 'straale')) o.material = new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });} });      // fyrets stråle er svag og lysende, ikke en fast kegle
     const hav_ = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshBasicMaterial({ color: OH ? OH.hav : 0x0c2531 })); hav_.rotation.x = -Math.PI / 2; hav_.position.y = -HAVDYB; scene.add(hav_); natTing.push(hav_);
     const form = new THREE.Shape(g.bane.land.map(([x, y]) => new THREE.Vector2(X(x), -Z(y))));          // skygger kun på selve øen
-    const sk = new THREE.Mesh(new THREE.ShapeGeometry(form), new THREE.ShadowMaterial({ opacity: 0.5 })); sk.rotation.x = -Math.PI / 2; sk.position.y = 0.012; sk.receiveShadow = true; scene.add(sk); natTing.push(sk);
+    const sk = new THREE.Mesh(new THREE.ShapeGeometry(form), new THREE.ShadowMaterial({ opacity: 0.5, depthWrite: false })); sk.rotation.x = -Math.PI / 2; sk.position.y = 0.012; sk.receiveShadow = true; sk.renderOrder = 2; scene.add(sk); natTing.push(sk);      // tegnes altid efter øen og skjuler den aldrig
     const uld = new THREE.MeshStandardMaterial({ color: 0xe9e4d8, roughness: 1 }), moerkt = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.8 });
     for (const [x0, y0, x1, y1] of g.bane.enge) for (let i = 0; i < Math.max(2, (x1 - x0) * (y1 - y0) / 6500); i++) {
       const o = new THREE.Group(), krop = new THREE.Mesh(kugleG, Math.random() < 0.85 ? uld : moerkt), hoved = new THREE.Mesh(kugleG, moerkt);
@@ -321,7 +321,7 @@ export function lavVisning(laerred, lag) {
   let g = null, grund = null, borg = null, livring = null, bredde = 1, hoejde = 1, tid = 0, valgt = null;
   const taarne = new Map(), fjender = new Map(), enheder = new Map(), skud = new Map(), tekster = [], doende = [];
   const verden = new THREE.Group(); scene.add(verden);
-  const skygge = new THREE.Mesh(new THREE.PlaneGeometry(200, 140), new THREE.ShadowMaterial({ opacity: 0.55 }));
+  const skygge = new THREE.Mesh(new THREE.PlaneGeometry(200, 140), new THREE.ShadowMaterial({ opacity: 0.55, depthWrite: false })); skygge.renderOrder = 2;
   skygge.rotation.x = -Math.PI / 2; skygge.position.y = 0.01; skygge.receiveShadow = true; scene.add(skygge);
 
   // ----- hjælpere til effekter -----

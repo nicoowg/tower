@@ -105,13 +105,30 @@ export const BOELGER = [
 for (const [w, n] of [[6, 5], [9, 8], [12, 10], [14, 12], [17, 16], [19, 18], [22, 22], [24, 26], [27, 30], [29, 36]]) BOELGER[w - 1].push(g('flyver', n, 0.6, 1));
 
 // Vejen fra indgang til skanse som hjørnepunkter. Hjørnerne rundes af i sim.js.
+// På øerne starter vejen et stykke inde på land, så intet stikker ud over havet.
+function paaLand(vej, land, ind = 40) {
+  const inde = ([x, y]) => { let i = false; for (let a = 0, b = land.length - 1; a < land.length; b = a++) { const [xa, ya] = land[a], [xb, yb] = land[b]; if ((ya > y) !== (yb > y) && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) i = !i; } return i; };
+  const klip = (v) => {
+    if (inde(v[0])) return v;
+    for (let i = 0; i < v.length - 1; i++) {
+      if (!inde(v[i + 1])) continue;
+      let [a, b] = [v[i], v[i + 1]];
+      for (let n = 0; n < 30; n++) { const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; if (inde(m)) b = m; else a = m; }
+      const l = Math.hypot(v[i + 1][0] - b[0], v[i + 1][1] - b[1]), t = Math.min(ind, l * 0.5) / (l || 1);
+      return [[Math.round(b[0] + (v[i + 1][0] - b[0]) * t), Math.round(b[1] + (v[i + 1][1] - b[1]) * t)], ...v.slice(i + 1)];
+    }
+    return v;
+  };
+  return klip(klip(vej).reverse()).reverse();
+}
+const oe = (d) => ({ punkter: paaLand(d.vej, d.land), bro: [] });
 export const BANER = [
   // Byerne: planerne laves af model/byplan.py, og selve byen bygges af model/by.py
   { id: 'kbh', navn: 'København', punkter: kbh.vej, by: 'by_kbh', ...kbh },
   { id: 'tokyo', navn: 'Tokyo', punkter: tokyo.vej, by: 'by_tokyo', ...tokyo },
   { id: 'nordlys', navn: 'Nordlys', punkter: nordlys.vej, by: 'by_nordlys', ...nordlys },
   { id: 'neon', navn: 'Neon', punkter: neon.vej, by: 'by_neon', ...neon },
-  { id: 'miami', navn: 'Miami', punkter: miami.vej, by: 'by_miami', ...miami },          // tropiske øer: model/tropeplan.py og model/trope.py
-  { id: 'lagune', navn: 'Månelagunen', punkter: lagune.vej, by: 'by_lagune', ...lagune },
-  { id: 'faero', navn: 'Færøerne', punkter: faero.vej, by: 'by_faero', ...faero },          // en ø: planen laves af model/faero_plan.py, øen bygges af model/oe.py
+  { id: 'miami', navn: 'Miami', by: 'by_miami', ...miami, ...oe(miami) },          // tropiske øer: model/tropeplan.py og model/trope.py
+  { id: 'lagune', navn: 'Månelagunen', by: 'by_lagune', ...lagune, ...oe(lagune) },
+  { id: 'faero', navn: 'Færøerne', by: 'by_faero', ...faero, ...oe(faero) },          // en ø: planen laves af model/faero_plan.py, øen bygges af model/oe.py
 ];
