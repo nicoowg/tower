@@ -104,6 +104,7 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .status .svag { color: var(--t3); }
 .status .svag b { color: var(--t1); }
 .status .lav { color: var(--orange); } .status .lav .i { color: var(--orange); }
+.status .fuld, .status .fuld b { color: var(--orange); }
 .naeste { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); gap: 14px; padding: 0 8px 0 18px; height: 40px; font-size: 13px; }
 .naeste #naesteHvad { display: inline-flex; gap: 12px; color: var(--t3); }
 .naeste #naesteHvad em { font-style: normal; color: var(--orange); }
@@ -176,7 +177,7 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .taarnvalg button.paa { opacity: 1; box-shadow: inset 0 0 0 1.5px #fff; }
 .outfits { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .outfit .mini { width: 100%; aspect-ratio: 1; border-radius: 16px; background: radial-gradient(closest-side at 50% 62%, var(--glod), transparent 75%), #0b0b0d; display: grid; place-items: center; overflow: hidden; margin-bottom: 4px; }
-.outfit .mini img { width: 118%; aspect-ratio: auto; background: none; border-radius: 0; }
+.outfit .mini img { width: 100%; aspect-ratio: auto; background: none; border-radius: 0; }
 .outfit.laast .mini img { filter: saturate(.7) brightness(.8); }
 .outfit .farver { display: flex; gap: 4px; margin: 8px 6px 0; }
 .outfit .farver i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .25); }
@@ -190,7 +191,7 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .vare { display: flex; flex-direction: column; padding: 10px 10px 14px; text-align: left; transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
 .vare:hover { transform: translateY(-4px); }
 .vare .foto { aspect-ratio: 3 / 4; border-radius: 18px; background: radial-gradient(closest-side at 50% 60%, var(--glod, rgba(219, 36, 46, .3)), transparent), rgba(255, 255, 255, .02); display: grid; place-items: center; overflow: hidden; }
-.vare .foto img { width: 120%; }
+.vare .foto img { width: 100%; }
 .vare b { font-size: 16px; margin: 12px 6px 0; }
 .vare span { margin: 2px 6px 0; color: var(--t3); }
 .vare .pris { display: flex; align-items: center; gap: 6px; margin: 12px 6px 0; color: var(--t1); font-weight: 600; }
@@ -299,3 +300,100 @@ h2 { font-size: 20px; font-weight: 600; letter-spacing: -.4px; flex: 1; }
 .slut .to:has(#nyBane) { grid-template-columns: auto auto 1fr; display: grid; }
 .slut .to:has(#nyBane) .knap { white-space: nowrap; padding: 0 20px; }
 .slut { min-width: 400px; }
+
+/* Telefon og touch */
+html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+#rum { touch-action: none; }
+@media (hover: none) {
+  .bane:hover, .vare:hover, .startbutik button:hover, .knap:hover { transform: none; }
+}
+@media (max-width: 640px) {
+  :root { --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px); --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px); }
+  h1 { font-size: 52px; letter-spacing: -2.4px; }
+  .knap.stor { height: 56px; padding: 0 28px; font-size: 16px; }
+
+  /* forsiden: logo og mønter øverst, fanerne som en vandret række under */
+  .hubtop { flex-wrap: wrap; height: auto; gap: 8px; padding: max(10px, var(--st)) calc(12px + var(--sr)) 8px calc(16px + var(--sl)); }
+  .logo { font-size: 22px; order: 0; }
+  .hubtop .luft { order: 1; }
+  .hubtop .profil { order: 2; height: 38px; padding: 0 14px; }
+  .hubtop > .pille:last-child { order: 3; height: 38px; padding: 0 14px; }
+  .faner { order: 4; flex: 0 0 100%; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
+  .faner::-webkit-scrollbar { display: none; }
+  .faner button { flex: none; padding: 0 15px; }
+  .spor { min-height: 0; }
+  .flade { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; }
+  .flade::-webkit-scrollbar { display: none; }
+  .prikker { bottom: calc(8px + var(--sb)); }
+  .midt, .midt.smal { position: relative; inset: auto; width: auto; margin: 0 calc(14px + var(--sr)) 0 calc(14px + var(--sl)); justify-content: flex-start; gap: 14px; padding: 10px 0 calc(40px + var(--sb)); min-height: 100%; }
+
+  .start { position: relative; inset: auto; width: auto; margin: 0 calc(14px + var(--sr)) 0 calc(14px + var(--sl)); grid-template-columns: 1fr; gap: 16px; padding: 8px 0 calc(40px + var(--sb)); overflow: visible; }
+  .startv { gap: 16px; }
+  .startlogo { font-size: 84px; letter-spacing: -4.5px; }
+  .startknapper .knap.stor { flex: 1; padding: 0 16px; }
+  .startknapper .knap.glas { height: 56px; padding: 0 18px; }
+  .starttal div { padding: 10px 14px; }
+  .starttal b { font-size: 19px; }
+  .naestebane canvas { width: 110px; }
+  #skive3 { max-height: 42vh; }
+  .startbutik { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .svaervalg { align-self: stretch; grid-template-columns: repeat(4, 1fr); }
+  .svaervalg button { height: 40px; border-radius: 18px; font-size: 12.5px; }
+  .baner { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; overflow: visible; }
+  .bane { padding: 8px 8px 12px; }
+  .bane canvas { border-radius: 14px; }
+  .bund { flex-direction: column; align-items: stretch; position: sticky; bottom: calc(26px + var(--sb)); }
+  .bund .knap.stor { width: 100%; }
+  .bund .udstyr { background: rgba(8, 8, 10, .92); }
+  .udstyr { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 6px; }
+  .plads { flex-direction: column; justify-content: center; height: auto; min-height: 64px; padding: 6px 2px; gap: 4px; font-size: 11px; text-align: center; overflow: hidden; }
+  .plads img, .slot img { width: 36px; height: 36px; }
+
+  /* arsenal og garderobe: figuren øverst, kortene under, hele siden ruller */
+  .ars { position: relative; inset: auto; margin: 0 calc(12px + var(--sr)) 0 calc(12px + var(--sl)); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; padding-bottom: calc(36px + var(--sb)); }
+  .detalje { order: -1; padding: 12px; gap: 10px; }
+  #skive, #skive2 { flex: none; height: 30vh; min-height: 180px; }
+  .om h3 { font-size: 26px; }
+  .om p { min-height: 0; }
+  .detalje .knap { flex: none; }
+  .gitter { overflow: visible; }
+  .gitter .rul { flex: none; overflow: visible; padding: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .outfits { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .kort b { font-size: 13px; margin: 8px 4px 0; }
+  .kort span { margin: 1px 4px 0; font-size: 12px; }
+  .taarnvalg button { width: 52px; height: 52px; }
+
+  .butikhoved h2, .online h2, #online h2 { font-size: 26px; letter-spacing: -1px; }
+  .butik { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .raekke { min-height: 52px; height: auto; gap: 12px; }
+  .raekke .vaelger { width: 190px; flex: none; }
+  .tilstande { grid-template-columns: repeat(2, 1fr); }
+  .kort_ { width: calc(100% - 32px); }
+
+  /* kampen: banen fylder skærmen, kompakt top, tårnbjælken nederst */
+  .hud { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); top: calc(6px + var(--st)); flex-wrap: wrap; height: auto; gap: 6px; }
+  .hud .status { order: 9; flex: 0 0 100%; justify-content: space-between; height: 38px; gap: 10px; padding: 0 16px; font-size: 13px; }
+  .status > span { gap: 6px; }
+  .status .i { width: 14px; height: 14px; }
+  .naeste, .boss { top: calc(102px + var(--st)); max-width: calc(100% - 16px); }
+  .naeste { font-size: 12px; gap: 10px; }
+  .naeste #naesteHvad { gap: 8px; }
+  .boss i { width: 150px; }
+  .dok { left: calc(8px + var(--sl)); right: calc(8px + var(--sr)); bottom: calc(8px + var(--sb)); transform: none; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; padding: 6px; border-radius: 26px; }
+  .slot { flex-direction: column; justify-content: center; gap: 3px; height: auto; min-height: 84px; padding: 6px 2px; text-align: center; border-radius: 20px; }
+  .slot div { align-items: center; font-size: 11.5px; line-height: 1.2; }
+  .slot div b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .slot kbd { display: none; }
+  .valgt, .saa-valgt .valgt { left: calc(0px + var(--sl)); right: calc(0px + var(--sr)); top: auto; bottom: 0; transform: none; width: auto; max-height: 62vh; overflow-y: auto; padding: 14px 16px calc(14px + var(--sb)); border-radius: 26px 26px 0 0; z-index: 4; gap: 10px; animation: skuffe .28s cubic-bezier(.2, .8, .2, 1); }
+  #kamp .valgt { background: rgba(8, 8, 10, .95); }
+  .valgt::before { content: ""; display: block; width: 38px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .25); margin: -4px auto 2px; }
+  .valgt .knap { height: 50px; }
+  .valgt .vaelger button { height: 36px; }
+  .slut, .slut:has(#nyBane) { width: calc(100% - 24px); min-width: 0; padding: 24px 18px; }
+  .slut .to:has(#nyBane) { grid-template-columns: 1fr 1fr; }
+  .slut .to:has(#nyBane) .knap:last-child { grid-column: 1 / -1; }
+  .adminpanel, .modstand { right: calc(8px + var(--sr)); top: calc(102px + var(--st)); }
+  .send { left: calc(8px + var(--sl)); bottom: calc(110px + var(--sb)); width: 170px; }
+}
+@keyframes skuffe { from { transform: translateY(100%); } to { transform: none; } }

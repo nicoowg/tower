@@ -112,11 +112,35 @@ export function klaed(navn, rod) {
 }
 
 // De nye helte har stoffet i materialets navn: "jakke|#3d4a3a|twill". [mønster, gentagelser pr. meter, styrke]
-const HELTESTOF = { vaev: ['vaev', 48, 0.16, 0.25], twill: ['twill', 40, 0.2, 0.3], strik: ['vaev', 26, 0.25, 0.4], laeder: ['boerste', 20, 0.12, 0.15], pels: ['graes', 16, 0.25, 0.4],
+const HELTESTOF = { vaev: ['vaev', 48, 0.16, 0.25], twill: ['twill', 40, 0.2, 0.3], strik: ['vaev', 26, 0.25, 0.4], laeder: ['beton', 10, 0.1, 0.03], pels: ['graes', 16, 0.25, 0.4],
   camo: ['camo', 3.5, 0.4, 0.05], kulfiber: ['fiber', 36, 0.25, 0.25], skael: ['skael', 12, 0.3, 0.4] };
 export function klaedHelt(rod) {
   rod.traverse((o) => {
     if (!o.isMesh) return;
     for (const m of [].concat(o.material)) { const s = m.name.split('|')[2]; if (HELTESTOF[s]) laeg(m, ...HELTESTOF[s]); }
+  });
+}
+
+// Kantlys: figurens omrids lyser svagt i outfittets egen farve, som studielyset bagfra i Shop-billederne.
+// Så kan en mørk figur (Natpatrulje, Neon) ses mod en mørk by. Lægges oven på stoffet, hvis der er et.
+export function kantLys(rod, t) {
+  const f = new THREE.Color(t?.id && t.id !== 'std' ? t.lys || t.k1 : '#ffd9c4').lerp(new THREE.Color(0xffffff), 0.3);
+  rod.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (m.userData.kant || !m.isMeshStandardMaterial) continue;
+      m.userData.kant = true;
+      const foer = m.onBeforeCompile, noegle = m.customProgramCacheKey?.bind(m);
+      m.onBeforeCompile = (sh, r) => {
+        foer?.call(m, sh, r);
+        sh.uniforms.kF = { value: f }; sh.uniforms.kS = { value: 0.55 };
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 kF; uniform float kS;')
+          .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+            float kR = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+            totalEmissiveRadiance += kF * kR * kS;`);
+      };
+      m.customProgramCacheKey = () => (noegle ? noegle() : '') + '-kant';
+      m.needsUpdate = true;
+    }
   });
 }

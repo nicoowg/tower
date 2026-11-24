@@ -4,24 +4,25 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TAARNE, FJENDER, FELT, VEJ } from './data.js';
 import { pers, saetning, RAAB, VARIGHED, vaelgHandling, pose } from './sind.js';
-import { tal, DRONEBANE, tagVed, TAGBONUS } from './sim.js';
-import { klaed, klaedOm, klaedHelt } from './stof.js';
+import { tal, DRONEBANE, tagVed, TAGBONUS, tilVej } from './sim.js';
+import { klaed, klaedOm, klaedHelt, kantLys } from './stof.js';
 import { tema } from './stil.js';
 import { pynt, pyntSkridt, EFFEKT } from './pynt.js';
 
 const K = 0.05;                                   // banens enheder -> meter i rummet
 const FIG = 1.3;                                  // figurerne er lidt større end deres plads på banen, så de kan ses
 const X = (x) => (x - FELT.b / 2) * K, Z = (y) => (y - FELT.h / 2) * K;
-const NAVNE = [...TAARNE.map((t) => t.id), ...Object.keys(FJENDER), 'enhed', 'borg', 'jeep', 'apc', 'kampvogn'];
+// monstre med 'lign' har ingen egen model endnu og låner en andens
+const NAVNE = [...TAARNE.map((t) => t.id), ...Object.keys(FJENDER).filter((k) => !FJENDER[k].lign), 'enhed', 'borg', 'jeep', 'apc', 'kampvogn'];
 const M = {};
 const ROED = 0xdb242e, ORANGE = 0xff9e33;
 
 export async function hentModeller(fremskridt) {
   const l = new GLTFLoader(); let n = 0;
   // de nye monstre: tre udgaver af hver type (model/helte/monstre.py). Mangler en, bruges den gamle.
-  const nye = Object.keys(FJENDER).flatMap((t) => [0, 1, 2].map((v) => [t, v]));
+  const nye = Object.keys(FJENDER).filter((k) => !FJENDER[k].lign || FJENDER[k].egen).flatMap((t) => [0, 1, 2].map((v) => [t, v]));
   const monstre = Promise.all(nye.map(async ([t, v]) => {
-    try { const g = await l.loadAsync(`model/monster/${t}_${v}.glb`); g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); klaedHelt(g.scene); M[`monster:${t}:${v}`] = g.scene; } catch {}
+    try { const g = await l.loadAsync(`model/monster/${t}_${v}.glb`); g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } }); smaaSkygge(g.scene); klaedHelt(g.scene); M[`monster:${t}:${v}`] = g.scene; } catch {}
   }));
   await Promise.all([monstre, ...NAVNE.map(async (navn) => {
     const g = await l.loadAsync(`model/${navn}.glb`);
@@ -38,9 +39,16 @@ export function hentHelt(id, tema_ = 'std') {
   const k = heltNoegle(id, tema_);
   if (!heltHent.has(k)) heltHent.set(k, new GLTFLoader().loadAsync(`model/helt/${id}_${tema_}.glb`).then((g) => {
     g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-    halsLed(g.scene); klaedHelt(g.scene); M[k] = g.scene; return g.scene;
+    halsLed(g.scene); smaaSkygge(g.scene); klaedHelt(g.scene); kantLys(g.scene, tema(tema_)); M[k] = g.scene; return g.scene;
   }).catch(() => { M[k] = null; return null; }));
   return heltHent.get(k);
+}
+// Små dele (knapper, fingre, øjne, spænder) kaster ikke skygge: i kampen er skyggen få punkter, men hver del koster en ekstra tegning i skyggekortet.
+// Med 17 helte og mange monstre var det over 1200 ekstra tegninger pr. billede.
+function smaaSkygge(rod) {
+  rod.updateMatrixWorld(true);
+  const H = new THREE.Box3().setFromObject(rod).getSize(new THREE.Vector3()).y || 1, b = new THREE.Box3(), v = new THREE.Vector3();
+  rod.traverse((o) => { if (o.isMesh && b.setFromObject(o).getSize(v).length() < H * 0.15) o.castShadow = false; });
 }
 // Heltenes 'hoved' ligger ved fødderne i modellen, så hovedet svingede rundt om fødderne.
 // Her flyttes leddet op i halsen (lige over hagen), og delene flyttes tilsvarende tilbage.
@@ -96,6 +104,36 @@ const GRUND = {
   tech: { g: ['#090a16', '#070812', '#05060c'], park: '#0a0c18', parkkant: 'rgba(45,240,255,.2)', plads: '#0d0f1e', fortov: '#0b0d1a', vand: '#050814', vandkant: 'rgba(45,240,255,.3)', bro: '#121426', vej: '#10121f', gitter: true },
   sne: { g: ['#7a8594', '#6c7685', '#56606e'], park: '#8d98a6', parkkant: 'rgba(255,255,255,.18)', plads: '#7d8896', fortov: '#8a95a3', vand: '#9cb4c6', vandkant: 'rgba(255,255,255,.5)', bro: '#3a3f48', vej: '#2c3038', drys: ['rgba(255,255,255,.35)', 'rgba(210,225,240,.3)'] },
 };
+// Dæmpning: banerne skal se virkelige og lidt mørke ud, ikke som legetøj. Klare, lyse farver tages mest ned,
+// mørke farver næsten ikke. Bruges på grunden, byens modeller, havet, himlen og disen. Lys, der gløder, røres ikke.
+const DAEMP = { s: 0.7, l: 0.82, top: 0.62 };
+const hsl_ = {};
+function daempFarve(c) {
+  c.getHSL(hsl_, THREE.SRGBColorSpace);
+  const l = hsl_.l * DAEMP.l, top = DAEMP.top;
+  c.setHSL(hsl_.h, hsl_.s * DAEMP.s, l > top * 0.75 ? top * 0.75 + (l - top * 0.75) * 0.45 : l, THREE.SRGBColorSpace);
+  return c;
+}
+const daempHex = (x) => daempFarve(new THREE.Color(x)).getHex();
+function daempLaerred(c) {
+  const ud = document.createElement('canvas'); ud.width = c.width; ud.height = c.height;
+  const k = ud.getContext('2d'); k.filter = `saturate(${DAEMP.s}) brightness(${DAEMP.l}) contrast(1.06)`; k.drawImage(c, 0, 0);
+  return ud;
+}
+function daempModel(rod) {
+  rod.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (!m || m.userData.daempet || !m.color) continue;
+      m.userData.daempet = true;
+      const gloeder = m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0;
+      if (gloeder && /^(fyr|rude|neon|krone|lys|lampe|lanterne|baal|glod|lava)/.test(m.name)) continue;
+      daempFarve(m.color); if (/vand|hav/.test(m.name)) daempFarve(m.color);      // vand dobbelt: ellers lyser havet op som en swimmingpool
+      if (gloeder) { daempFarve(m.emissive); m.emissiveIntensity *= /vand|hav/.test(m.name) ? 0.35 : 0.7; }      // vand og flader, der lyser af sig selv, skal ikke stråle
+      if (m.roughness !== undefined) m.roughness = Math.min(1, m.roughness + 0.06);
+    }
+  });
+}
 function grundBillede(bane) {
   const P = GRUND[bane.tema] || GRUND.std;
   const oe = !!bane.oe, by = !!bane.vand && !oe, pr = by ? 26 : 32, m = by ? 40 : 24, c = document.createElement('canvas');
@@ -142,14 +180,15 @@ function grundBillede(bane) {
   vej(); k.lineWidth = VEJ + 5; k.strokeStyle = 'rgba(255,255,255,.2)'; k.stroke();
   vej(); k.lineWidth = VEJ; k.strokeStyle = bane.stil?.vej_ || (oe ? '#3a3732' : P.vej); k.stroke();
   vej(); k.lineWidth = 2; k.setLineDash([14, 22]); k.strokeStyle = 'rgba(255,255,255,.10)'; k.stroke();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const t = new THREE.CanvasTexture(oe ? daempLaerred(c) : c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return { t, b: c.width / pr, h: c.height / pr, oe };
 }
 
 export function lavVisning(laerred, lag) {
   const renderer = new THREE.WebGLRenderer({ canvas: laerred, antialias: true, powerPreference: 'high-performance' });
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+  // samme farvekurve som Blender-billederne i Shop (AgX); kontrasten lægges på bagefter i efterbehandlingen
+  renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.25;
   const scene = new THREE.Scene(); scene.background = new THREE.Color(0x050506);
   miljoe(renderer, scene);
   const himmellys = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.55); scene.add(himmellys);
@@ -172,7 +211,7 @@ export function lavVisning(laerred, lag) {
     b.o.rotation.y = ga[0] === ga[2] ? 0 : Math.PI / 2;
   }
   let natTing = [], byFarve = null;
-  const himmelAf = (stop) => { const c = document.createElement('canvas'); c.width = 4; c.height = 256; const k = c.getContext('2d'), f = k.createLinearGradient(0, 0, 0, 256); stop.forEach(([u, farve]) => f.addColorStop(u, farve)); k.fillStyle = f; k.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
+  const himmelAf = (stop, daemp) => { const c = document.createElement('canvas'); c.width = 4; c.height = 256; const k = c.getContext('2d'), f = k.createLinearGradient(0, 0, 0, 256); stop.forEach(([u, farve]) => f.addColorStop(u, daemp ? '#' + daempHex(farve).toString(16).padStart(6, '0') : farve)); k.fillStyle = f; k.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
   const HIMMEL = {
     sakura: { h: himmelAf([[0, '#06030c'], [0.55, '#160a1e'], [1, '#2a1230']]), taage: 0x1c0f22, sol: 0xffc6dc },
     tech: { h: himmelAf([[0, '#030212'], [0.55, '#0d0628'], [1, '#22104a']]), taage: 0x120a2e, sol: 0xb9a6ff },
@@ -280,7 +319,10 @@ export function lavVisning(laerred, lag) {
     traeKlumper = [];
     by.updateMatrixWorld(true);
     by.traverse((o) => {
-      if (!o.isMesh || !/^(Palmer|Parker)/.test(o.name + ' ' + (o.parent?.name || ''))) return;
+      // net med flere materialer bliver til børn med materialets navn (kokos, trae026), så hele stien op til byen tjekkes
+      let p_ = o, erTrae = false;
+      while (p_ && p_ !== by) { if (/^(Palmer|Parker|Holmtraer|Traeer|Lunde|Flora|Skov)/.test(p_.name)) erTrae = true; p_ = p_.parent; }
+      if (!o.isMesh || !erTrae) return;
       const geo = o.geometry, pos = geo.attributes.position;
       if (!geo.userData.orig) geo.userData.orig = pos.array.slice();
       else { pos.array.set(geo.userData.orig); pos.needsUpdate = true; }
@@ -297,7 +339,8 @@ export function lavVisning(laerred, lag) {
     });
   }
   function fjernTraeer(x, y) {
-    const cx = X(x), cz = Z(y), r = 30 * K;
+    const cx = X(x), cz = Z(y), r = 34 * K;
+    detaljeFjern(cx, cz, r);
     for (const { geo } of traeKlumper) {
       const pos = geo.attributes.position; let rort = false;
       for (const k of geo.userData.klumper) {
@@ -309,9 +352,163 @@ export function lavVisning(laerred, lag) {
       if (rort) pos.needsUpdate = true;
     }
   }
+  // Småting på banen: kantsten, fodgængerfelter, lygtepæle, bænke, hegn, skilte, sten, græs og blomster,
+  // og på bygningerne altaner og tagudstyr. Alt står i fem InstancedMesh (fem draw calls), farvet pr. ting,
+  // og placeres med et fast frø pr. bane, så hver bane ser sådan ud hver gang, men forskellig fra de andre.
+  let detalje = null, detaljeSteder = [];
+  const detaljeGeo = { kasse: new THREE.BoxGeometry(1, 1, 1), roer: new THREE.CylinderGeometry(0.5, 0.5, 1, 10), kugle: new THREE.IcosahedronGeometry(0.5, 2), kegle: new THREE.ConeGeometry(0.5, 1, 6) };
+  const iPoly = (p, x, y) => { let ind = false; for (let i = 0, j = p.length - 1; i < p.length; j = i++) { const [xi, yi] = p[i], [xj, yj] = p[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) ind = !ind; } return ind; };
+  function detaljeOp() {
+    detalje?.removeFromParent(); detalje = null; detaljeSteder = [];
+    const b = g.bane, oe = !!b.oe, tm = b.tema, sne = tm === 'sne', tech = tm === 'tech';
+    let fr = 1; for (const c of b.id) fr = (fr * 31 + c.charCodeAt(0)) % 2147483647;
+    const tf = () => (fr = (fr * 16807) % 2147483647) / 2147483647, mel = (a, c) => a + tf() * (c - a), en = (l) => l[(tf() * l.length) | 0];
+    const slut = b.p[b.p.length - 1];
+    const fri = (x, y, luft = 0) => x > 24 && y > 24 && x < FELT.b - 24 && y < FELT.h - 24 && tilVej(b, x, y) > VEJ / 2 + 6 + luft
+      && !(b.spaer || []).some(([a, c, d, e]) => x > a - 8 - luft && x < d + 8 + luft && y > c - 8 - luft && y < e + 8 + luft)
+      && !(b.vand || []).some((p) => iPoly(p, x, y)) && !(b.bro || []).some((p) => iPoly(p, x, y))
+      && (!b.land || iPoly(b.land, x, y)) && Math.hypot(x - slut[0], y - slut[1]) > 110;
+    const L = { kasse: [], roer: [], kugle: [], kegle: [], lys: [] };
+    const c_ = new THREE.Color();
+    const farve = (hex, v = 0.06) => { c_.set(daempHex(hex)); c_.offsetHSL(0, 0, (tf() - 0.5) * v); return c_.getHex(); };
+    // læg(form, x, y i banens enheder, højde over jorden i m, mål i m, drej, farve, på tag)
+    const laeg = (form, x, y, h, sx, sy, sz, v, hex, tag) => { L[form].push([X(x), h, Z(y), sx, sy, sz, v, form === 'lys' ? hex : farve(hex), tag]); };
+    const vejF = sne ? '#b9c0c8' : tech ? '#3a4058' : oe ? '#cdbf9f' : '#8e9196';
+    const metal = sne ? '#2c3038' : tech ? '#1c2034' : oe ? '#5a4a3a' : '#2a2d33', trae = sne ? '#5a4636' : '#7a5a3e';
+    const lysF = tech ? 0x7ff4ff : tm === 'sakura' ? 0xffc6d8 : 0xffd9a0;
+    // 1) kantsten langs begge vejkanter og fodgængerfelter
+    const P = b.p; let s = 0;
+    for (let i = 1; i < P.length; i++) {
+      const [ax, ay] = P[i - 1], [bx, by_] = P[i], l = Math.hypot(bx - ax, by_ - ay); if (l < 1) continue;
+      const dx = (bx - ax) / l, dy = (by_ - ay) / l, v = Math.atan2(dx, dy);
+      for (let t = 0; t < l; t += 20) {
+        const n = Math.min(20, l - t) + 1, mx = ax + dx * (t + n / 2), my = ay + dy * (t + n / 2);
+        for (const sd of [-1, 1]) {
+          const x = mx - dy * sd * (VEJ / 2 + 1.2), y = my + dx * sd * (VEJ / 2 + 1.2);
+          if ((b.vand || []).some((p) => iPoly(p, x, y)) || (b.land && !iPoly(b.land, x, y)) || tilVej(b, x, y) < VEJ / 2 - 1) continue;
+          laeg('kasse', x, y, 0.035, 0.1, 0.07, n * K, v, vejF, 0);
+        }
+        s += n - 1;
+        if (s > 380 && tf() < 0.06 && i > 1 && i < P.length - 2) {
+          s = 0;
+          for (let k = -2.5; k <= 2.5; k++) laeg('kasse', mx - dy * k * 7.5, my + dx * k * 7.5, 0.004, 0.22, 0.008, 0.7, v, sne ? '#e8eef4' : '#c8c8c2', 0);
+        }
+      }
+    }
+    // 2) lygtepæle, og ved nogle af dem en bænk, et skilt eller en pullert
+    for (let t = 60 + tf() * 60; t < (b.laengde || 3000) - 120; t += mel(130, 210)) {
+      let i = 1, acc = 0; for (; i < P.length; i++) { const l = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc + l > t) break; acc += l; }
+      if (i >= P.length) break;
+      const [ax, ay] = P[i - 1], [bx, by_] = P[i], l = Math.hypot(bx - ax, by_ - ay), u = (t - acc) / l, dx = (bx - ax) / l, dy = (by_ - ay) / l;
+      const sd = tf() < 0.5 ? -1 : 1, x = ax + (bx - ax) * u - dy * sd * (VEJ / 2 + 9), y = ay + (by_ - ay) * u + dx * sd * (VEJ / 2 + 9);
+      if (!fri(x, y, -10)) continue;
+      const hp = tech ? 0.95 : 0.8;
+      laeg('roer', x, y, hp / 2, 0.07, hp, 0.07, 0, metal, 0);
+      laeg('roer', x, y, 0.04, 0.13, 0.08, 0.13, 0, metal, 0);
+      laeg('kasse', x + dy * sd * 2.4, y - dx * sd * 2.4, hp, 0.24, 0.045, 0.06, Math.atan2(dx, dy), metal, 0);
+      laeg('lys', x + dy * sd * 4.6, y - dx * sd * 4.6, hp - 0.04, 0.16, 0.08, 0.16, 0, lysF, 0);
+      const r = tf(), v = Math.atan2(dx, dy);
+      if (r < 0.4) {
+        const bx2 = x + dx * 14, by2 = y + dy * 14;
+        if (fri(bx2, by2, -10)) {
+          laeg('kasse', bx2, by2, 0.12, 0.12, 0.03, 0.34, v, oe ? trae : '#4a3a30', 0);
+          laeg('kasse', bx2 - dy * sd * 2.6, by2 + dx * sd * 2.6, 0.2, 0.025, 0.1, 0.34, v, oe ? trae : '#4a3a30', 0);
+          for (const e of [-1, 1]) laeg('kasse', bx2 + dx * e * 5.5, by2 + dy * e * 5.5, 0.06, 0.03, 0.12, 0.1, v, metal, 0);
+        }
+      } else if (r < 0.6) {
+        const sx = x + dx * 10, sy = y + dy * 10;
+        laeg('roer', sx, sy, 0.26, 0.022, 0.52, 0.022, 0, metal, 0);
+        laeg('kasse', sx, sy, 0.5, 0.2, 0.15, 0.015, v + Math.PI / 2, en(tech ? ['#2a6f86', '#7a2d6a'] : ['#3d5f86', '#86563d', '#4b7a55', '#a8a29a']), 0);
+      } else if (r < 0.78 && !oe) {
+        for (const e of [-1, 0, 1]) laeg('roer', x + dx * e * 8, y + dy * e * 8, 0.07, 0.05, 0.14, 0.05, 0, metal, 0);
+      }
+    }
+    // 3) hegn i stykker langs vejen på øerne og i sneen
+    if (oe || sne) for (let n = 0; n < 7; n++) {
+      const t = mel(200, (b.laengde || 3000) - 300);
+      let i = 1, acc = 0; for (; i < P.length; i++) { const l = Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]); if (acc + l > t) break; acc += l; }
+      if (i >= P.length) continue;
+      const [ax, ay] = P[i - 1], [bx, by_] = P[i], l = Math.hypot(bx - ax, by_ - ay), dx = (bx - ax) / l, dy = (by_ - ay) / l, sd = tf() < 0.5 ? -1 : 1, v = Math.atan2(dx, dy);
+      for (let k = 0, u0 = t - acc; k < 9 && u0 + k * 12 < l; k++) {
+        const u = u0 + k * 12, x = ax + dx * u - dy * sd * (VEJ / 2 + 16), y = ay + dy * u + dx * sd * (VEJ / 2 + 16);
+        if (!fri(x, y, -14)) break;
+        laeg('roer', x, y, 0.17, 0.05, 0.34, 0.05, 0, trae, 0);
+        if (k) for (const hh of [0.14, 0.27]) laeg('kasse', x - dx * 6, y - dy * 6, hh, 0.03, 0.045, 12 * K, v, trae, 0);
+      }
+    }
+    // 4) sten, græstotter og blomster i klynger; i byen kun i parkerne og ved vejen
+    const blomst = tm === 'sakura' ? ['#f2b8c8', '#ffffff', '#e48aa8'] : oe ? ['#f2d15a', '#f07a6a', '#ffffff', '#c890e0'] : ['#e8d070', '#d07070', '#e8e8e8'];
+    const graes = b.stil ? b.stil.graes : sne ? ['#c8d0d8', '#aab4c0'] : tech ? ['#1e2a3a', '#16202e'] : ['#3d6b3a', '#2c5530'];
+    const stenF = sne ? '#d8dee6' : oe ? '#8a8478' : '#5c5e62';
+    const omraade = oe ? null : (b.park || []);
+    const tilfSted = () => {
+      if (omraade && omraade.length && tf() < 0.7) { const p = en(omraade); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of p) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } return [mel(x0, x1), mel(y0, y1)]; }
+      if (!oe) { const t = tf() * (b.p.length - 1) | 0, sd = tf() < 0.5 ? -1 : 1; return [b.p[t][0] + mel(-30, 30), b.p[t][1] + sd * mel(VEJ / 2 + 12, VEJ / 2 + 40)]; }
+      return [mel(30, FELT.b - 30), mel(30, FELT.h - 30)];
+    };
+    const klynger = oe ? 220 : tech ? 50 : 110;
+    for (let n = 0; n < klynger; n++) {
+      const [cx, cy] = tilfSted(); if (!fri(cx, cy)) continue;
+      const art = tf();
+      for (let k = 0, m = 3 + (tf() * 6 | 0); k < m; k++) {
+        const x = cx + mel(-14, 14), y = cy + mel(-14, 14); if (!fri(x, y)) continue;
+        if (art < 0.25 || tech) { const st = mel(0.1, 0.32); laeg('kugle', x, y, st * 0.25, st, st * mel(0.45, 0.7), st * mel(0.7, 1), tf() * 6, stenF, 0); }
+        else if (art < 0.8 && !sne) { const hh = mel(0.16, 0.3); for (let j = 0; j < 4; j++) laeg('kegle', x + mel(-2.5, 2.5), y + mel(-2.5, 2.5), hh / 2, mel(0.06, 0.1), hh * mel(0.7, 1), mel(0.06, 0.1), tf() * 6, en(graes), 0); if (tf() < 0.5) for (let j = 0; j < 3; j++) laeg('kugle', x + mel(-3, 3), y + mel(-3, 3), hh * 0.8, 0.075, 0.06, 0.075, 0, en(blomst), 0); }
+        else { const st = mel(0.22, 0.42); laeg('kugle', x, y, st * 0.1, st, st * 0.55, st * mel(0.7, 1), tf() * 6, sne ? '#e4e9ef' : en(graes), 0); }
+      }
+    }
+    // 5) bygningerne: tagudstyr på alle flade tage, altaner på facaden mod kameraet
+    for (const [x0, y0, x1, y1, h] of b.tage || []) {
+      const bb = x1 - x0, dd = y1 - y0;
+      for (let n = 0, m = 1 + (tf() * 3 | 0); n < m; n++) {
+        const x = mel(x0 + 14, x1 - 14), y = mel(y0 + 14, y1 - 14), r = tf();
+        if (r < 0.35) laeg('kasse', x, y, h + 0.05, mel(0.12, 0.22), 0.1, mel(0.1, 0.16), (tf() * 2 | 0) * Math.PI / 2, '#7c8088', 1);
+        else if (r < 0.55 && !oe) { laeg('roer', x, y, h + 0.22, 0.16, 0.22, 0.16, 0, '#6a5444', 1); laeg('kegle', x, y, h + 0.36, 0.17, 0.06, 0.17, 0, '#4a3c32', 1); for (const [ex, ey] of [[-2, -2], [2, 2], [-2, 2], [2, -2]]) laeg('roer', x + ex, y + ey, h + 0.05, 0.015, 0.1, 0.015, 0, metal, 1); }
+        else if (r < 0.75) { const ah = mel(0.3, 0.6); laeg('roer', x, y, h + ah / 2, 0.012, ah, 0.012, 0, '#9aa0a8', 1); laeg('kasse', x, y, h + ah * 0.8, 0.12, 0.008, 0.008, tf() * 3, '#9aa0a8', 1); }
+        else if (oe) laeg('kasse', x, y, h + 0.04, 0.3, 0.02, 0.18, 0, '#2a3a52', 1);
+        else laeg('roer', x, y, h + 0.04, 0.09, 0.08, 0.09, 0, '#8a8e96', 1);
+      }
+      if (oe || h < 0.6 || bb < 40) continue;
+      const etage = 0.32, nAlt = Math.max(1, Math.floor(bb / 26));
+      for (let e = 1; e * etage < h - 0.15; e++) {
+        if (tf() < 0.3) continue;
+        for (let k = 0; k < nAlt; k++) {
+          if (tf() < 0.35) continue;
+          const x = x0 + (k + 0.5) * (bb / nAlt), y = y1 + 2.2;
+          laeg('kasse', x, y, e * etage, 0.34, 0.03, 0.17, 0, oe ? '#efe9dc' : '#55585e', 1);
+          laeg('kasse', x, y + 3.3, e * etage + 0.06, 0.34, 0.1, 0.02, 0, metal, 1);
+          for (const ex of [-1, 1]) laeg('kasse', x + ex * 3.3, y + 1.6, e * etage + 0.06, 0.02, 0.1, 0.16, 0, metal, 1);
+        }
+      }
+    }
+    // byg nettene
+    detalje = new THREE.Group(); detalje.name = 'detaljer';
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0.05 }), lysMat = new THREE.MeshBasicMaterial({ color: lysF });
+    if (klip.length) mat.clippingPlanes = lysMat.clippingPlanes = klip;
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e3 = new THREE.Euler(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
+    for (const form of Object.keys(L)) {
+      const l = L[form]; if (!l.length) continue;
+      const o = new THREE.InstancedMesh(form === 'lys' ? detaljeGeo.kugle : detaljeGeo[form], form === 'lys' ? lysMat : mat, l.length);
+      l.forEach(([x, y, z, sx, sy, sz, v, hex, tag], i) => {
+        m4.compose(v3.set(x, y, z), q.setFromEuler(e3.set(0, v, 0)), s3.set(sx, sy, sz)); o.setMatrixAt(i, m4);
+        if (form !== 'lys') o.setColorAt(i, c_.setHex(hex));
+        detaljeSteder.push({ o, i, x, z, m: m4.clone() });
+      });
+      o.castShadow = form === 'kasse' || form === 'roer'; o.receiveShadow = true;
+      o.computeBoundingSphere(); detalje.add(o);
+    }
+    scene.add(detalje);
+  }
+  // fjerner småting under et nyt tårn (og på taget, hvis tårnet står der)
+  const nul4 = new THREE.Matrix4().makeScale(0, 0, 0);
+  function detaljeFjern(cx, cz, r) {
+    const rort = new Set();
+    for (const d of detaljeSteder) if (!d.vaek && Math.hypot(d.x - cx, d.z - cz) < r) { d.o.setMatrixAt(d.i, nul4); d.vaek = true; rort.add(d.o); }
+    for (const o of rort) o.instanceMatrix.needsUpdate = true;
+  }
   function oeOp() {                            // Færøerne i skumringen: hav hele vejen rundt, får, fugle, vandfald og tåge
     const st = g.bane.stil, hx = (f) => parseInt(f.slice(1), 16);
-    const OH = st ? { h: himmelAf(st.himmel), taage: hx(st.taage), hav: hx(st.hav), sol: hx(st.sol), solI: st.solI, himI: st.himI } : OEHIMMEL[g.bane.oeTema]; HAVDYB = g.bane.havdyb || 3.2;
+    const OH = st ? { h: himmelAf(st.himmel, true), taage: daempHex(hx(st.taage)), hav: daempHex(daempHex(hx(st.hav))), sol: hx(st.sol), solI: st.solI * 0.9, himI: st.himI * 0.8 } : OEHIMMEL[g.bane.oeTema]; HAVDYB = g.bane.havdyb || 3.2;
     scene.background = OH ? OH.h : skumring; scene.fog = new THREE.Fog(OH ? OH.taage : 0x2a4356, 100, 330);
     sol.color.set(OH ? OH.sol : 0xffe0bb); sol.intensity = OH ? OH.solI : 2.5; himmellys.intensity = OH ? OH.himI : 0.75; himmellys.color.set(0x9fc0dc); scene.environmentIntensity = 0.5;
     if (g.bane.oeTema === 'lagune') vejrOp('tech');      // lysende plankton, der stiger op i natten
@@ -395,6 +592,7 @@ export function lavVisning(laerred, lag) {
     fly.position.set(-70 + q * 190, 46 + q * 6, -75 + q * 20); fly.material.color.set(Math.sin(tid * 5) > 0.8 ? 0xff3b30 : 0xffffff);
   }
   let g = null, grund = null, borg = null, livring = null, bredde = 1, hoejde = 1, tid = 0, valgt = null;
+  let raketMat = null, granatMat = null;
   const taarne = new Map(), fjender = new Map(), enheder = new Map(), skud = new Map(), tekster = [], doende = [];
   const verden = new THREE.Group(); scene.add(verden);
   const skygge = new THREE.Mesh(new THREE.PlaneGeometry(200, 140), new THREE.ShadowMaterial({ opacity: 0.55, depthWrite: false })); skygge.renderOrder = 2;
@@ -443,7 +641,7 @@ export function lavVisning(laerred, lag) {
     rod.position.set(X(t.x), 0, Z(t.y));
     const v = { rod, drej: rod.getObjectByName('drej'), vaaben: rod.getObjectByName('vaaben'), spin: rod.getObjectByName('spin'), drone: rod.getObjectByName('drone'), munding: rod.getObjectByName('munding'),
       foedt: tid, trin: -1, prikker: [], op: -9, vinkel: 0, fase: Math.random() * 6, helt: !!hm, lysFarve: tm.lys ? new THREE.Color(tm.lys).getHex() : null, neon: !!tm.gloed, temaId, effekt: EFFEKT[temaId], tromle: rod.getObjectByName('spin_tromle') };
-    v.hoved = rod.getObjectByName('hoved'); v.sk = rod.getObjectByName('skuldre'); v.benV = rod.getObjectByName('benV'); v.benH = rod.getObjectByName('benH'); v.mand = rod.getObjectByName('mand');
+    v.hoved = rod.getObjectByName('hoved'); v.ok = rod.getObjectByName('overkrop'); v.sk = rod.getObjectByName('skuldre'); v.benV = rod.getObjectByName('benV'); v.benH = rod.getObjectByName('benH'); v.mand = rod.getObjectByName('mand');
     // hver figur får sit eget tempo og sine egne vaner, så to ens tårne aldrig bevæger sig ens
     Object.assign(v, { puls: 1.2 + Math.random() * 0.9, n1: 0.37 + Math.random() * 0.3, n2: 0.83 + Math.random() * 0.5, stiv: 170 + Math.random() * 110, vf: 0, hv: 0, gest: null, naeste: tid + 1 + Math.random() * 5, rykAmp: 1, rykSide: 0, sidstSkud: -9 });
     if (v.benV) { v.bV0 = v.benV.rotation.x; v.bH0 = v.benH.rotation.x; }
@@ -458,7 +656,7 @@ export function lavVisning(laerred, lag) {
     verden.add(rod); return v;
   }
   function lavFjende(f) {
-    const rod = (f.model || M[`monster:${f.type}:${(f.nr || 0) % 3}`] || M[f.type]).clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
+    const ln = f.d?.lign, rod = (f.model || M[`monster:${f.type}:${(f.nr || 0) % 3}`] || M[f.type] || M[`monster:${ln}:${(f.nr || 0) % 3}`] || M[ln]).clone(true); rod.scale.setScalar(0.01); rod.rotation.order = 'YXZ';
     const v = { rod, krop: rod.getObjectByName('krop') || rod, benV: rod.getObjectByName('benV'), benH: rod.getObjectByName('benH'), armV: rod.getObjectByName('armV'), armH: rod.getObjectByName('armH'), vV: rod.getObjectByName('vingeV'), vH: rod.getObjectByName('vingeH'), hoved: rod.getObjectByName('hoved'), hale: rod.getObjectByName('hale'), fase: Math.random() * 6, foedt: tid,
       side: f.d.boss ? 0 : (Math.random() - 0.5) * 2 * Math.max(0, VEJ / 2 - (f.d.r || 8) - 5), takt: 0.85 + Math.random() * 0.3, vugge: 0.03 + Math.random() * 0.06 };      // hver sin plads på vejen og sin egen gang
     v.p = pers(f.type); v.naeste = tid + (f.d.boss ? 1.2 : 2 + Math.random() * 7); v.akt = null;
@@ -468,6 +666,8 @@ export function lavVisning(laerred, lag) {
   const bobler = []; let sidsteBoble = 0, snakLyd = null;
   function goer(v, navn, ekstra) { if (v && !v.doer) v.akt = { navn, t0: tid, sek: VARIGHED[navn] || 1, ...ekstra }; }
   function sig(f, v, tekst, tving) {
+    // monstrene snakker ikke længere (Nico: talebobler og pludren virkede pinlige)
+    return;
     if (!f || (!tving && (bobler.length >= 6 || tid - sidsteBoble < 0.3))) return;
     if (bobler.some((b) => b.f === f)) return;
     sidsteBoble = tid;
@@ -496,7 +696,7 @@ export function lavVisning(laerred, lag) {
           ekstra.vinkel = Math.max(-1.4, Math.min(1.4, w));
         }
         if (f.d.luft && navn !== 'loop' && navn !== 'vink') navn = 'loop';
-        const ven = !f.d.boss && Math.random() < 0.35 && naermeste(g.fjender, f.x, f.y, 45, f).find((x) => { const w = fjender.get(x.nr); return w && !w.akt && !x.d.boss; });
+        const ven = false && naermeste(g.fjender, f.x, f.y, 45, f).find((x) => { const w = fjender.get(x.nr); return w && !w.akt && !x.d.boss; });
         if (ven) {                                          // to monstre vender sig mod hinanden og snakker
           const w = fjender.get(ven.nr), side = Math.sign(v.side - w.side) || 1;
           goer(v, 'snak', { vinkel: 0.9 * side }); goer(w, 'snak', { vinkel: -0.9 * side });
@@ -533,7 +733,7 @@ export function lavVisning(laerred, lag) {
   // Trin 5 har sine egne dele (maskinen). Her vælges, hvilke dele bevægelserne skal bruge.
   function vaelgDele(v, trin) {
     const find = (n) => (trin >= 4 && v.rod.getObjectByName(n + '5')) || v.rod.getObjectByName(n);
-    v.sk = find('skuldre'); v.hoved = find('hoved'); v.vaaben = find('vaaben'); v.munding = find('munding'); v.benV = find('benV'); v.benH = find('benH');
+    v.sk = find('skuldre'); v.ok = find('overkrop'); v.hoved = find('hoved'); v.vaaben = find('vaaben'); v.munding = find('munding'); v.benV = find('benV'); v.benH = find('benH');
     v.mand = trin >= 4 ? null : v.rod.getObjectByName('mand'); v.mech = trin >= 4 && !!v.rod.getObjectByName('skuldre5'); v.platform = trin >= 4 && !!v.rod.getObjectByName('platform5');
     v.hvil = v.vaaben ? v.vaaben.position.clone() : null;
     if (v.benV) { v.bV0 = v.benV.rotation.x; v.bH0 = v.benH.rotation.x; }
@@ -548,7 +748,29 @@ export function lavVisning(laerred, lag) {
   function mundingen(v, ud) { if (v.munding) v.munding.getWorldPosition(ud); else ud.copy(v.rod.position).setY(1.5); return ud; }
 
   // ----- hændelser fra reglerne -----
+  // ----- monstrenes evner: spring, spurt og skjold vises på figuren -----
+  const skjoldMat = new THREE.MeshBasicMaterial({ color: 0x7fb4ff, transparent: true, opacity: 0.16, depthWrite: false });
+  function evneTegn(f, v, str) {
+    const d = f.d;
+    if (d.hop && f.hopT > 0) { const q = 1 - f.hopT / d.hop[2]; v.rod.position.y += Math.sin(Math.PI * q) * (d.boss ? 2.6 : 1.7); v.rod.rotation.x = -0.35 * Math.sin(Math.PI * q); }
+    if (d.spurt && f.spurtT > 0) {
+      v.rod.rotation.x = Math.min(0.42, (v.rod.rotation.x || 0) + 0.32);
+      if (Math.random() < 0.5) { a.set(v.rod.position.x, 0.15, v.rod.position.z); gnist(a, (Math.random() - 0.5) * 0.6, 0.5, (Math.random() - 0.5) * 0.6, 0.35, 0x8c8478, 0.12, 0.35, 0.35); }
+    }
+    if (f.skjold > 0 && !v.skjold) { v.skjold = new THREE.Mesh(kugleG, skjoldMat); v.skjold.scale.setScalar(0.75); v.skjold.position.y = 0.75; v.rod.add(v.skjold); }
+    if (v.skjold) { v.skjold.visible = f.skjold > 0; if (v.skjold.visible) v.skjold.rotation.y += 0.02; }
+  }
+  function evneHaendelse(e) {
+    const v = e.nr != null ? fjender.get(e.nr) : null;
+    if (e.a === 'hel') {
+      ringFx(e.x, e.y, e.r, 0x6dff9e, 0.6, 0.45);
+      for (const x of g.fjender) if (x.hp > 0 && Math.hypot(x.x - e.x, x.y - e.y) <= e.r) { a.set(X(x.x), 1.2, Z(x.y)); gnist(a, 0, 1.4, 0, 0.6, 0x6dff9e, 0.1, 0.02, 0.85); }
+    } else if (e.a === 'skjold') ringFx(e.x, e.y, e.r, 0x7fb4ff, 0.7, 0.45);
+    else if (e.a === 'skjoldbrud') { a.set(X(e.x), 1.1, Z(e.y)); for (let i = 0; i < 6; i++) gnist(a, (Math.random() - 0.5) * 3, 1 + Math.random() * 2, (Math.random() - 0.5) * 3, 0.35, 0x9cc6ff, 0.08, 0.02, 0.9); }
+    else if (e.a === 'hop' && v) { a.set(v.rod.position.x, 0.1, v.rod.position.z); gnist(a, 0, 0.6, 0, 0.4, 0x8c8478, 0.3, 0.8, 0.35); }
+  }
   function haendelse(e) {
+    evneHaendelse(e);
     sindHaendelse(e);
     const v = e.t ? taarne.get(e.t) : null;
     if (e.a === 'spor' && v) {
@@ -608,6 +830,8 @@ export function lavVisning(laerred, lag) {
   const ret = new THREE.Vector3(0, Math.sin(0.93), Math.cos(0.93));     // ser skråt ned
   const midte = new THREE.Vector3(0, 0, 0.5);
   const ret0 = ret.clone();
+  // stående skærm: banen drejes en kvart omgang, så dens lange side følger skærmens lange side
+  let drej0 = 0;
   let grundAfstand = 100, zoom = 1, forskyd = 0, drejV = 0, nik = 0.93;
   function stil() {
     ret.set(Math.sin(drejV) * Math.cos(nik), Math.sin(nik), Math.cos(drejV) * Math.cos(nik));
@@ -617,12 +841,16 @@ export function lavVisning(laerred, lag) {
     if (scene.fog) { scene.fog.near = grundAfstand / zoom + 55; scene.fog.far = grundAfstand / zoom + 230; }      // disen begynder altid bag banen, aldrig oven på den
   }
   function pas() {
-    const top = 74 / hoejde * 2, bund = 128 / hoejde * 2, side = 24 / bredde * 2, m0 = new THREE.Vector3(0, 0, 0.5);
+    const staa = hoejde > bredde * 1.1;
+    ret0.set(Math.sin(drej0) * Math.cos(0.93), Math.sin(0.93), Math.cos(drej0) * Math.cos(0.93));
+    // stående: mål selve topbjælken og tårnbjælken, så banen ligger frit imellem dem (de flytter sig med notch og hjemlinje)
+    const hudB = staa ? document.querySelector('#kamp .hud')?.getBoundingClientRect().bottom || 0 : 0, dokT = staa ? document.getElementById('dok')?.getBoundingClientRect().top || 0 : 0;
+    const top = (staa ? (hudB ? hudB + 52 : 112) : 74) / hoejde * 2, bund = (staa ? (dokT ? hoejde - dokT + 10 : 118) : 128) / hoejde * 2, side = 24 / bredde * 2, m0 = new THREE.Vector3(0, 0, 0.5);
     const hj = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, z]) => new THREE.Vector3(x * FELT.b / 2 * K, 0, z * FELT.h / 2 * K));
     const se_ = (d) => { kamera.position.copy(m0).addScaledVector(ret0, d); kamera.lookAt(m0); kamera.updateMatrixWorld(); let lo = 9, hi = -9, bred = 0; for (const h of hj) { a.copy(h).project(kamera); lo = Math.min(lo, a.y); hi = Math.max(hi, a.y); bred = Math.max(bred, Math.abs(a.x)); } return [lo, hi, bred]; };
     kamera.clearViewOffset(); kamera.updateProjectionMatrix();
     let lo = 20, hi = 400;
-    for (let i = 0; i < 26; i++) { const d = (lo + hi) / 2, [y0, y1, bred] = se_(d); if (bred <= 1 - side && y1 - y0 <= 2 - top - bund) hi = d; else lo = d; }
+    for (let i = 0; i < 26; i++) { const d = (lo + hi) / 2, [y0, y1, bred] = se_(d); if (bred <= 1 - (staa ? 8 / bredde * 2 : side) && y1 - y0 <= 2 - top - bund) hi = d; else lo = d; }
     grundAfstand = hi;
     const [y0, y1] = se_(hi);
     forskyd = ((y0 + y1) / 2 - (bund - top) / 2) * hoejde / 2;       // skub billedet, så banen ligger midt mellem top- og bundlinjen
@@ -652,16 +880,18 @@ export function lavVisning(laerred, lag) {
   function kig(x, y, z = maal.zoom) { maal.midte.set(X(x), 0, Z(y)); maal.zoom = z; hold(); midte.copy(maal.midte); zoom = z; stil(); }
   function zoomTrin(n) { maal.zoom = Math.max(0.7, Math.min(3.2, maal.zoom * n)); }
   function drej(dx, dy) { maal.drej -= dx * 0.006; maal.nik = Math.max(0.35, Math.min(1.45, maal.nik + dy * 0.004)); }      // rundt om det punkt, man ser på, og op/ned
-  function ligeUd() { maal.drej = Math.round(drejV / (2 * Math.PI)) * 2 * Math.PI; maal.nik = 0.93; maal.zoom = 1; maal.midte.set(0, 0, 0.5); }
-  function nulstilKamera() { drejV = maal.drej = 0; nik = maal.nik = 0.93; zoom = maal.zoom = 1; midte.set(0, 0, 0.5); maal.midte.set(0, 0, 0.5); }
+  function ligeUd() { maal.drej = drej0 + Math.round((drejV - drej0) / (2 * Math.PI)) * 2 * Math.PI; maal.nik = 0.93; maal.zoom = 1; maal.midte.set(0, 0, 0.5); }
+  function nulstilKamera() { drejV = maal.drej = drej0; nik = maal.nik = 0.93; zoom = maal.zoom = 1; midte.set(0, 0, 0.5); maal.midte.set(0, 0, 0.5); }
 
   // Efterbehandling: dybdeskarphed (skarpt på banen, blødt forrest og bagerst) og lys, der gløder.
   // Ét ekstra trin pr. billede. Bliver billederne for langsomme, slår den sig selv fra.
-  const billede = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4, depthTexture: new THREE.DepthTexture(4, 4) });
+  // 2 prøver pr. punkt mod kanttakker (før 4): billedet tegnes allerede i 1,5x opløsning og sløres bagefter, så forskellen ses ikke, men grafikkortet sparer det meste af tiden
+  const billede = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 2, depthTexture: new THREE.DepthTexture(4, 4) });
   const efterMat = new THREE.ShaderMaterial({
-    uniforms: { tF: { value: billede.texture }, tD: { value: billede.depthTexture }, px: { value: new THREE.Vector2() }, naer: { value: 1 }, fjern: { value: 600 }, fokus: { value: 100 }, skarp: { value: 30 }, vidde: { value: 90 }, gloed: { value: 0.55 } },
+    uniforms: { tF: { value: billede.texture }, tD: { value: billede.depthTexture }, px: { value: new THREE.Vector2() }, naer: { value: 1 }, fjern: { value: 600 }, fokus: { value: 100 }, skarp: { value: 30 }, vidde: { value: 90 }, gloed: { value: 0.55 }, proj: { value: 800 }, aoR: { value: 0.7 }, aoS: { value: 1.0 }, kontrast: { value: 0.42 } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-    fragmentShader: `uniform sampler2D tF; uniform sampler2D tD; uniform vec2 px; uniform float naer; uniform float fjern; uniform float fokus; uniform float skarp; uniform float vidde; uniform float gloed; varying vec2 vUv;
+    fragmentShader: `uniform sampler2D tF; uniform sampler2D tD; uniform vec2 px; uniform float naer; uniform float fjern; uniform float fokus; uniform float skarp; uniform float vidde; uniform float gloed; uniform float proj; uniform float aoR; uniform float aoS; uniform float kontrast; varying vec2 vUv;
+      float dybde(vec2 p) { float z = texture2D(tD, p).x * 2.0 - 1.0; return 2.0 * naer * fjern / (fjern + naer - z * (fjern - naer)); }
       void main() {
         float z = texture2D(tD, vUv).x * 2.0 - 1.0, d = 2.0 * naer * fjern / (fjern + naer - z * (fjern - naer));
         float uskarp = clamp((abs(d - fokus) - skarp) / vidde, 0.0, 1.0);
@@ -669,14 +899,34 @@ export function lavVisning(laerred, lag) {
         float drej_ = fract(sin(dot(vUv, vec2(12.9898, 78.233))) * 43758.5453) * 6.2832;      // hvert punkt drejer mønstret lidt, så der ikke opstår stjerner
         for (int i = 0; i < 24; i++) {
           float v = float(i) * 2.39996 + drej_, r = sqrt((float(i) + 0.5) / 24.0); vec2 o = vec2(cos(v), sin(v)) * r * px;
-          sum += texture2D(tF, vUv + o * uskarp * 7.0).rgb;
+          if (uskarp > 0.0) sum += texture2D(tF, vUv + o * uskarp * 7.0).rgb;
           lys += max(texture2D(tF, vUv + o * (5.0 + uskarp * 7.0)).rgb - vec3(1.0), 0.0);
         }
-        vec3 c = sum / 25.0 + lys / 24.0 * gloed;
-        c = mix(vec3(dot(c, vec3(0.299, 0.587, 0.114))), c, 1.14) * 1.07 + 0.012;      // lidt mere farve og løftede skygger
-        c *= 1.0 - 0.32 * pow(length(vUv - 0.5) * 1.3, 2.4);                           // svag mørk kant
+        // skarpe punkter (hele midten af banen) springer de 24 sløringsprøver over: samme resultat, færre opslag
+        if (uskarp <= 0.0) sum *= 25.0;
+        // bløde skygger i krogene (som Blenders lys, der hopper rundt): punkter, der ligger dybere end deres naboer på begge sider,
+        // er i en fold, under en hjelm eller ved foden af en figur. Parvise prøver, så skrå flader ikke bliver mørke.
+        float ao = 0.0;
+        if (texture2D(tD, vUv).x < 0.9999) {
+          float rpx = clamp(aoR * proj / d, 1.5, 36.0);
+          for (int i = 0; i < 8; i++) {
+            float v = float(i) * 2.39996 + drej_, r = sqrt((float(i) + 0.5) / 8.0); vec2 o = vec2(cos(v), sin(v)) * r * rpx * px;
+            float d1 = dybde(vUv + o), d2 = dybde(vUv - o), dd = d - 0.5 * (d1 + d2);
+            ao += smoothstep(0.04 * aoR, 0.4 * aoR, dd) * (1.0 - smoothstep(aoR * 1.5, aoR * 4.0, max(d - d1, d - d2)));
+          }
+          ao = 1.0 - aoS * ao / 8.0;
+        } else ao = 1.0;
+        vec3 c = sum / 25.0 * ao + lys / 24.0 * gloed;
+        float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = pow(max(c, 0.0), vec3(1.05)) * 0.98;                                        // dybere skygger, intet løft
+        c *= mix(vec3(0.94, 0.98, 1.06), vec3(1.04, 1.0, 0.95), smoothstep(0.0, 0.6, lum));      // køligt i skyggerne, varmt i lyset
+        c *= 1.0 - 0.42 * pow(length(vUv - 0.5) * 1.3, 2.2);                           // mørkere kant
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
+        vec3 t_ = clamp(gl_FragColor.rgb, 0.0, 1.0);
+        t_ = pow(t_, vec3(1.14));                                                        // AgX løfter det sorte; træk det ned igen
+        t_ = mix(t_, t_ * t_ * (3.0 - 2.0 * t_), kontrast);                           // AgX "Medium High Contrast" som i Blender
+        float tl = dot(t_, vec3(0.2126, 0.7152, 0.0722)); gl_FragColor.rgb = max(mix(vec3(tl), t_, 1.12), 0.0);      // AgX tager lidt farve; giv den tilbage
         #include <colorspace_fragment>
       }`,
     depthTest: false, depthWrite: false,
@@ -684,7 +934,10 @@ export function lavVisning(laerred, lag) {
   const efterScene = new THREE.Scene(), efterKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   efterScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), efterMat));
   let efter = true, langsom = 0, maalt = 0, skarp = true, bloedt = true, dprSkala = 1;
+  let skyggeN = 0;
   function vis_(dt) {
+    // solen står stille, så skyggekortet tegnes kun hvert andet billede (en tegning pr. figurdel sparet); kun det, der bevæger sig, er et billede bagud
+    renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = (skyggeN = (skyggeN + 1) % 2) === 0;
     if (efter) {
       const u = efterMat.uniforms, f = grundAfstand / zoom;
       u.naer.value = kamera.near; u.fjern.value = kamera.far; u.fokus.value = f; u.skarp.value = f * 0.09 + 2; u.vidde.value = f * 0.32;      // miniature: kun midten skarp, som i Form
@@ -695,10 +948,14 @@ export function lavVisning(laerred, lag) {
   function grafik(til) { const nyt = til ?? !efter; if (nyt !== efter) { efter = nyt; stoerrelse(); } return efter; }
   function stoerrelse() {
     bredde = laerred.clientWidth || 1; hoejde = laerred.clientHeight || 1;
-    const dpr = Math.max(0.6, Math.min(skarp ? 1.5 : 1, devicePixelRatio || 1) * dprSkala);
+    const lille = Math.min(bredde, hoejde) < 600;
+    const dpr = Math.max(0.6, Math.min(skarp ? (lille ? 1.25 : 1.5) : 1, devicePixelRatio || 1) * dprSkala);
     renderer.setPixelRatio(dpr); renderer.setSize(bredde, hoejde, false);
     billede.setSize(Math.round(bredde * dpr), Math.round(hoejde * dpr)); efterMat.uniforms.px.value.set(1 / bredde, 1 / hoejde);
+    efterMat.uniforms.proj.value = hoejde / (2 * Math.tan(THREE.MathUtils.degToRad(kamera.fov / 2)));
     lag.width = bredde * dpr; lag.height = hoejde * dpr; k2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const d0 = hoejde > bredde * 1.1 ? Math.PI / 2 : 0;
+    if (d0 !== drej0) { drejV += d0 - drej0; maal.drej += d0 - drej0; drej0 = d0; }
     kamera.aspect = bredde / hoejde; pas();
   }
   const straale = new THREE.Raycaster(), plan = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), tagPlan = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), mus = new THREE.Vector2();
@@ -729,6 +986,7 @@ export function lavVisning(laerred, lag) {
     if (!spil) { by?.removeFromParent(); by = null; byLiv = []; byHjul = []; }
     if (grund) { grund.removeFromParent(); grund.material.map.dispose(); grund.geometry.dispose(); }
     if (borg) borg.removeFromParent();
+    detalje?.removeFromParent(); detalje = null; detaljeSteder = [];
     g = spil; valgt = null; raekke.visible = false; fjernSpoegelse(); nulstilKamera();
     if (!g) return;
     const gb = grundBillede(g.bane);
@@ -737,8 +995,9 @@ export function lavVisning(laerred, lag) {
     const s = g.bane.p[g.bane.p.length - 1];
     by?.removeFromParent(); by = null; byLiv = []; byHjul = [];
     if (g.bane.by) {                           // en rigtig by omkring vejen; byens eget rådhus er skansen
-      by = M[g.bane.by]; scene.add(by); if (g.bane.oe) oeOp(); else natOp();
+      by = M[g.bane.by]; daempModel(by); scene.add(by); if (g.bane.oe) oeOp(); else natOp();
       traeOp();
+      detaljeOp();
       byLiv = (g.bane.liv || []).map((l) => ({ ...l, o: by.getObjectByName(l.knude) })).filter((l) => l.o);
       byHjul = []; by.traverse((o) => { if (o.name.startsWith('spin')) byHjul.push(o); });
       borg = new THREE.Group();
@@ -861,6 +1120,18 @@ export function lavVisning(laerred, lag) {
         if (v.drej && art !== 'morter') v.drej.rotation.z = (ga === 'vaegt' ? ge * 0.06 : 0) + uro * 0.008;
       }
       if (v.hoved) { v.hv += ((ledig ? uro * 0.2 + (ga === 'kig' ? ge * 0.95 : 0) : 0) - v.hv) * Math.min(1, dt * 5); v.hoved.rotation.y = v.hv; }
+      // heltenes overkrop (jakke, arme, våben, hoved) drejer om taljen: åndedræt, rekyl, vægtskifte, se sig om.
+      // Gamle modeller uden 'overkrop' får et roligt åndedræt og rekyl på hele figuren i stedet.
+      if (!v.sk && art !== 'vogn' && art !== 'moelle') {
+        const tung = t.id === 'skytte' || t.id === 'skinne', ryk = Math.max(0, 1 - siden / (tung ? 0.32 : 0.16)) * v.rykAmp, aand = Math.sin(tid * v.puls + v.fase);
+        if (v.ok) {
+          v.ok.rotation.x = aand * 0.022 + uro * 0.01 - ryk * (tung ? 0.16 : 0.07) + (ga === 'tjek' ? Math.abs(ge) * 0.12 : 0) - (ga === 'straek' ? Math.abs(ge) * 0.1 : 0) - (art === 'morter' ? Math.max(0, 1 - siden / 0.5) * 0.18 : 0) - hop * 0.3;
+          v.ok.rotation.y = (ga === 'kig' ? ge * 0.3 : 0) + uro * 0.04 + ryk * v.rykSide;
+          v.ok.rotation.z = (ga === 'vaegt' ? -ge * 0.06 : 0) + Math.sin(tid * 0.31 + v.fase) * 0.02;
+          v.ok.scale.set(1 + aand * 0.006, 1, 1 + aand * 0.006);
+          if (v.drej && art !== 'morter') v.drej.rotation.z = (ga === 'vaegt' ? ge * 0.04 : 0) + uro * 0.006;
+        } else if (v.drej && v.helt) v.drej.rotation.x = aand * 0.008 - ryk * (tung ? 0.06 : 0.03);
+      }
       if (v.tromle) v.tromle.rotation.y += dt * (siden < 0.35 ? 26 : 1.5);
       if (v.temaId !== 'std') pyntSkridt(v.rod, tid);
       const ef = v.effekt;                       // outfittets synlige effekt; flere gnister jo højere trin
@@ -918,6 +1189,7 @@ export function lavVisning(laerred, lag) {
             for (const x of naermeste(g.fjender, f.x, f.y, 110, f)) { const w = fjender.get(x.nr); if (w && Math.random() < 0.5) goer(w, 'skraek'); } }
           if (ramt > 0.95 && !v.akt && Math.random() < 0.004) sig(f, v, RAAB.ramt[(Math.random() * 3) | 0]);
           sindSkridt(f, v, str);
+          evneTegn(f, v, str);
         }
       }
       for (const [nr, v] of kort) if (!set.has(nr)) { kort.delete(nr); if (v.doer) { v.d = 0; v.s0 = v.rod.scale.x; doende.push(v); } else v.rod.removeFromParent(); }
@@ -929,10 +1201,12 @@ export function lavVisning(laerred, lag) {
     }
 
     // granater i luften
+    // to fælles materialer: før fik hvert skud sit eget nye materiale, som aldrig blev frigivet
+    raketMat ??= new THREE.MeshStandardMaterial({ color: 0xdb242e, roughness: 0.4, emissive: 0xff5a20, emissiveIntensity: 2 }); granatMat ??= new THREE.MeshStandardMaterial({ color: 0x2e3a24, roughness: 0.4, emissive: 0, emissiveIntensity: 2 });
     set.clear();
     for (const s of g.skud) {
       set.add(s);
-      let o = skud.get(s); if (!o) { o = new THREE.Mesh(kugleG, new THREE.MeshStandardMaterial({ color: s.raket ? 0xdb242e : 0x2e3a24, roughness: 0.4, emissive: s.raket ? 0xff5a20 : 0, emissiveIntensity: 2 })); o.scale.setScalar(s.raket ? 0.14 : 0.2); o.castShadow = true; scene.add(o); skud.set(s, o); }
+      let o = skud.get(s); if (!o) { o = new THREE.Mesh(kugleG, s.raket ? raketMat : granatMat); o.scale.setScalar(s.raket ? 0.14 : 0.2); o.castShadow = true; scene.add(o); skud.set(s, o); }
       const u = Math.min(1, s.t / s.flyv);
       o.position.set(X(s.x0 + (s.tx - s.x0) * u), 1.4 * (1 - u) + Math.sin(Math.PI * u) * s.hoej * K + 0.2, Z(s.y0 + (s.ty - s.y0) * u));
       if (s.raket && Math.random() < 0.7) gnist(o.position, 0, 0.5, 0, 0.25, 0xaaaaaa, 0.08, 0.3, 0.3);
@@ -1001,6 +1275,28 @@ export function figurTil(id, trin = 0, temaId = 'std') {
 }
 
 // Arsenalets drejeskive: én figur ad gangen, i samme lys som banen.
+// Hvert tårns temperament i garderoben: hvor rolig (ro), hvor nysgerrig (kig) og hvor utålmodig (uro) personen er,
+// og hvilke vaner den helst har, mens den venter.
+const LAUNE = {
+  std: { ro: 1, kig: 0.5, uro: 0.3, vaner: ['vaegt', 'kig', 'hvil', 'nik', 'aande'] },
+  vagt: { ro: 0.9, kig: 0.7, uro: 0.4, vaner: ['kig', 'kig', 'vaegt', 'nik', 'hvil'] },
+  skytte: { ro: 1.4, kig: 0.9, uro: 0.1, vaner: ['kig', 'sigt', 'aande', 'vaegt'] },
+  moelle: { ro: 1.3, kig: 0.4, uro: 0.2, vaner: ['aande', 'nik', 'vaegt', 'hvil'] },
+  hagl: { ro: 0.7, kig: 0.5, uro: 0.7, vaner: ['uro', 'vaegt', 'hvil', 'kig'] },
+  kaster: { ro: 0.8, kig: 0.6, uro: 0.6, vaner: ['uro', 'kig', 'nik', 'vaegt'] },
+  garder: { ro: 1.6, kig: 0.2, uro: 0, vaner: ['aande', 'vaegt', 'nik'] },
+  frost: { ro: 1.2, kig: 0.5, uro: 0.2, vaner: ['aande', 'kig', 'hvil', 'vaegt'] },
+  braender: { ro: 0.6, kig: 0.6, uro: 0.8, vaner: ['uro', 'uro', 'kig', 'hvil'] },
+  kaserne: { ro: 1.3, kig: 0.4, uro: 0.2, vaner: ['nik', 'vaegt', 'aande', 'kig'] },
+  signal: { ro: 1, kig: 1, uro: 0.3, vaner: ['kig', 'kig', 'nik', 'vaegt'] },
+  morter: { ro: 1.1, kig: 0.5, uro: 0.3, vaner: ['hvil', 'vaegt', 'kig', 'aande'] },
+  drone: { ro: 0.9, kig: 1, uro: 0.4, vaner: ['kig', 'kig', 'uro', 'nik'] },
+  lyn: { ro: 0.7, kig: 0.7, uro: 0.7, vaner: ['uro', 'kig', 'vaegt'] },
+  skinne: { ro: 1.4, kig: 0.8, uro: 0.1, vaner: ['sigt', 'kig', 'aande'] },
+  straale: { ro: 1.2, kig: 0.6, uro: 0.3, vaner: ['aande', 'kig', 'hvil', 'nik'] },
+  bjoern: { ro: 1.5, kig: 0.3, uro: 0.1, vaner: ['aande', 'vaegt'] },
+};
+const TOMT = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 export function lavFremviser(laerred, valg = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas: laerred, antialias: true, alpha: true });
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.2;
@@ -1012,25 +1308,79 @@ export function lavFremviser(laerred, valg = {}) {
   const kant = new THREE.DirectionalLight(0xff4a4a, 1.4); kant.position.set(4, 3, -6); scene.add(kant);
   const gulv = new THREE.Mesh(new THREE.CircleGeometry(4, 64), new THREE.ShadowMaterial({ opacity: 0.45 })); gulv.rotation.x = -Math.PI / 2; gulv.receiveShadow = true; scene.add(gulv);
   const kamera = new THREE.PerspectiveCamera(28, 1, 0.5, 60);
+  // Menuens farvetone: figurerne skal ligne appen (sort glas, dyb rød), ikke en lys legetøjsbutik.
+  // Kun her i fremviseren; spillets egen visning røres ikke. Lyset dæmpes og varmes, og et trin bagefter
+  // tager lidt farve ud, gør skyggerne dybe og rødsorte og lyset varmt, og mørkner kanten. Gennemsigtigheden bevares.
+  scene.children.forEach((o) => { if (o.isHemisphereLight) { o.intensity = 0.42; o.groundColor.set(0x2a0c0e); } });
+  sol.intensity = 2.5; sol.color.set(0xffe9d6); kant.intensity = 2.0; kant.color.set(0xff3a3a);
+  renderer.toneMappingExposure = 1.05;
+  const tone = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+  const toneMat = new THREE.ShaderMaterial({
+    uniforms: { tF: { value: tone.texture } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `uniform sampler2D tF; varying vec2 vUv;
+      void main() {
+        vec4 f = texture2D(tF, vUv); vec3 c = f.a > 0.0 ? f.rgb / max(f.a, 0.001) : f.rgb;
+        float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(lum), c, 0.8);                                                    // mindre farve
+        c = pow(max(c, 0.0), vec3(1.07));                                              // dybere skygger
+        c *= mix(vec3(1.06, 0.9, 0.9), vec3(1.04, 1.0, 0.94), smoothstep(0.0, 0.5, lum));      // rødsort i skyggen, varmt i lyset
+        c *= 1.0 - 0.3 * pow(length(vUv - 0.5) * 1.4, 2.4);
+        gl_FragColor = vec4(c, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        gl_FragColor.rgb *= f.a; gl_FragColor.a = f.a;
+      }`,
+    depthTest: false, depthWrite: false, transparent: true, premultipliedAlpha: true,
+  });
+  const toneScene = new THREE.Scene(), toneKam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  toneScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), toneMat));
+  function tegnBillede() {
+    const st = renderer.getDrawingBufferSize(new THREE.Vector2());
+    if (tone.width !== st.x || tone.height !== st.y) tone.setSize(st.x, st.y);
+    renderer.setRenderTarget(tone); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(scene, kamera);
+    renderer.setRenderTarget(null); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(toneScene, toneKam);
+  }
+  // dronen flyver i en rolig cirkel rundt om ham, lidt over hovedhøjde, vipper ind i svinget og gynger lidt
+  let drone_ = null, droneV = 0.9;
+  function droneSted(a, t = 0) { drone_.position.set(Math.cos(a) * 1.0, 2.25 + Math.sin(t * 2.1) * 0.06, Math.sin(a) * 1.0); drone_.rotation.set(0.04, -a, 0.12); }
+  let vane = null, naesteVane = 2, laune = null, vaegt = 0, vaegtMaal = 0;
   let figur = null, spin = null, hoved = null, sk = null, v = -0.55, maalV = -0.55, tid = 0, senest = '', traek = null, vaaben_ = null, vaabenHvil = 0, hilsT = -9, mus = { x: 0, y: 0 }, blik = 0, naesteBlik = 0, tjek = -9;
   addEventListener('pointermove', (e) => { const r = laerred.getBoundingClientRect(); if (r.width) mus = { x: Math.max(-1.5, Math.min(1.5, (e.clientX - (r.left + r.width / 2)) / r.width * 2)), y: Math.max(-1, Math.min(1, (e.clientY - (r.top + r.height * 0.3)) / r.height * 2)) }; });
   laerred.addEventListener('pointerdown', (e) => { traek = { x: e.clientX, v }; laerred.setPointerCapture?.(e.pointerId); });
+  // zoom: rul eller knib med to fingre på figuren; dobbeltklik zoomer ud igen. Jo tættere på, jo højere oppe kigger kameraet (mod ansigtet).
+  let grundKam = null, zoomF = 1, zoomMaal = 1;
+  laerred.addEventListener('wheel', (e) => { e.preventDefault(); zoomMaal = Math.max(1, Math.min(4, zoomMaal * Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0025)))); }, { passive: false });
+  laerred.addEventListener('dblclick', () => { zoomMaal = 1; });
+  function zoomKamera(dt) {
+    if (!grundKam) return;
+    zoomF += (zoomMaal - zoomF) * Math.min(1, dt * 8);
+    const q = (zoomF - 1) / 3, se_ = grundKam.se.clone(); se_.y += q * 0.45;
+    kamera.position.copy(se_).add(grundKam.p.clone().sub(grundKam.se).multiplyScalar(1 / zoomF)); kamera.lookAt(se_);
+  }
   laerred.addEventListener('pointermove', (e) => { if (traek) { v = traek.v + (e.clientX - traek.x) * 0.012; maalV = v; } });
   addEventListener('pointerup', () => { traek = null; });
   function vis(id, trin = 0, temaId = 'std') {
     const hm = helt(id, temaId);
-    if (!hm && M[heltNoegle(id, temaId)] === undefined) hentHelt(id, temaId).then((m) => { if (m && senest === `${id}:${trin}:${temaId}`) vis(id, trin, temaId); });
     senest = `${id}:${trin}:${temaId}`;
+    // helten er ikke hentet endnu: behold den figur, der står, til den rigtige er kommet (ellers ses den gamle klodsfigur et øjeblik)
+    if (!hm && M[heltNoegle(id, temaId)] === undefined) { hentHelt(id, temaId).then(() => { if (senest === `${id}:${trin}:${temaId}`) vis(id, trin, temaId); }); return; }
     figur?.removeFromParent(); figur = (hm || M[id]).clone(true); if (!hm) klaedOm(figur, tema(temaId), id);
     // trin 5 svæver på sin platform
-    if (trin >= 4 && figur.getObjectByName('platform5')) figur.getObjectByName('drej').position.y += 0.55;
+    if (trin >= 4 && figur.getObjectByName('platform5') && !valg.staa) figur.getObjectByName('drej').position.y += 0.55;
+    // garderobe og kort: personen står på gulvet, ingen metalplade og ingen svævende platform
+    if (valg.staa) { figur.traverse((o) => { if (/^(fod_net|sokkel|platform5|op4\.?001)/.test(o.name)) o.visible = false; }); const d_ = figur.getObjectByName('drej'); if (d_ && hm) d_.position.y -= 0.12; }
     if (!hm) pynt(figur, temaId, trin);
-    if (valg.udenSokkel) figur.traverse((o) => { if (/^(fod_net|sokkel|platform5|op4\.001)/.test(o.name)) o.visible = false; });      // forsiden: kun personen, ingen plade
+    if (valg.udenSokkel) figur.traverse((o) => { if (/^(fod_net|sokkel|platform5|op4\.?001)/.test(o.name)) o.visible = false; });      // forsiden: kun personen, ingen plade
     vaaben_ = figur.getObjectByName('vaaben'); if (vaaben_) vaabenHvil = vaaben_.rotation.x;
+    drone_ = figur.getObjectByName('drone'); if (drone_) droneSted(0.9);      // dronen starter ved siden af ham, ikke oven i hovedet
     spin = figur.getObjectByName('spin'); hoved = figur.getObjectByName('hoved'); sk = figur.getObjectByName('skuldre'); visTrin(figur, trin); scene.add(figur);
-    const stor = (id === 'bjoern' ? 1.25 : 1) * (hm ? 1.12 : 1), op_ = hm && trin >= 4 ? 0.35 : 0;
+    if (valg.staa || valg.udenSokkel) figur.traverse((o) => { if (/^(fod_net|sokkel|platform5|lysstraale)/.test(o.name) || (o.isMesh && [].concat(o.material).some((m) => /^(svaeveskaer|auralys|partikellys)/.test(m.name)))) o.visible = false; });      // efter visTrin, som ellers tænder trin-delene igen
+    const stor = (id === 'bjoern' ? 1.25 : 1) * (hm ? 1.12 : 1), op_ = hm && trin >= 4 && !valg.staa ? 0.35 : 0;
+    vane = null; naesteVane = tid + 1.5; laune = LAUNE[id] || LAUNE.std;
     if (valg.udenSokkel) { kamera.position.set(0, 2.6, 6.6); kamera.lookAt(0, 1.55, 0); maalV = -0.22; }        // forsiden: tættere på, og figuren vender sig næsten mod en
-    else { kamera.position.set(0, 3.1 * stor + op_, 8.6 * stor); kamera.lookAt(0, (hm ? 1.45 : 1.25) + op_, 0); }
+    else { kamera.position.set(0, 2.7 * stor + op_, 7.0 * stor); kamera.lookAt(0, (hm ? 1.4 : 1.25) + op_, 0); }      // tættere på end før: figuren fylder billedet
+    grundKam = { p: kamera.position.clone(), se: new THREE.Vector3(0, valg.udenSokkel ? 1.55 : (hm ? 1.4 : 1.25) + op_, 0) };
   }
   function tegn(dt) {
     if (!figur) return;
@@ -1047,29 +1397,90 @@ export function lavFremviser(laerred, valg = {}) {
       vaabenNed = Math.sin(Math.PI * Math.min(1, Math.max(0, (hq - 0.6) / 2.2))) * 0.12;
       nik = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (hq - 1.3) / 0.7)))) * 0.28 + Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (hq - 2.0) / 0.5)))) * 0.14;
     }
-    if (tid > naesteBlik) { naesteBlik = tid + 3 + Math.random() * 5; blik = Math.random() < 0.35 ? (Math.random() - 0.5) * 1.6 : 0; if (Math.random() < 0.25) tjek = tid; }
+    if (tid > naesteBlik) { naesteBlik = tid + 3 + Math.random() * 5; blik = Math.random() < 0.35 * (laune?.kig ?? 0.5) * 2 ? (Math.random() - 0.5) * 1.6 : 0; if (Math.random() < 0.25) tjek = tid; }
     const tq = (tid - tjek) / 1.6; if (tq > 0 && tq < 1) vaabenNed += Math.sin(Math.PI * tq) * 0.08;          // ser til våbnet
+    // vaner, mens den venter: en ad gangen, med pauser imellem. Hver vane bløder ind og ud (bue 0..1..0).
+    const L = laune || LAUNE.std;
+    if (!vane && tid > naesteVane && hq > 3.2) { const n = L.vaner[Math.random() * L.vaner.length | 0]; vane = { n, t0: tid, l: { vaegt: 0.9, kig: 2.6, hvil: 3.2, nik: 1.1, aande: 2.4, uro: 1.8, sigt: 2.8 }[n] * (0.8 + L.ro * 0.4), s: Math.random() < 0.5 ? -1 : 1 }; }
+    let bue = 0, kropDrej = 0, loeft = 0, hovedX = 0, hovedY = 0;
+    if (vane) {
+      const q = (tid - vane.t0) / vane.l;
+      if (q >= 1) { vane = null; naesteVane = tid + (2.5 + Math.random() * 4) * L.ro; }
+      else {
+        bue = q < 0.25 ? glat(q / 0.25) : q > 0.75 ? glat((1 - q) / 0.25) : 1;         // ind, hold, ud
+        if (vane.n === 'vaegt') vaegtMaal = vane.s;                                        // lægger vægten over på det andet ben og bliver der
+        else if (vane.n === 'kig') { hovedY = vane.s * 0.75 * bue; kropDrej = vane.s * 0.22 * bue; }      // kigger sig over skulderen
+        else if (vane.n === 'hvil') { vaabenNed += 0.32 * bue; hovedX = 0.12 * bue; }       // sænker våbnet og slapper af
+        else if (vane.n === 'nik') { hovedX = Math.max(0, Math.sin(Math.PI * q * 2)) * 0.3; hovedY = -0.1 * bue; }      // nikker til en
+        else if (vane.n === 'aande') { loeft = Math.sin(Math.PI * q) * 0.025; hovedX = -0.12 * Math.sin(Math.PI * q); }      // et dybt åndedrag, hovedet lidt op
+        else if (vane.n === 'uro') { loeft = Math.abs(Math.sin(q * Math.PI * 4)) * 0.035 * bue; kropDrej = Math.sin(q * Math.PI * 3) * 0.12 * bue; }      // vipper utålmodigt på tæerne
+        else if (vane.n === 'sigt') { vaabenNed -= 0.06 * bue; hovedX = 0.1 * bue; hovedY = vane.s * 0.35 * bue; kropDrej = vane.s * 0.3 * bue; }      // tager sigte mod noget i det fjerne
+      }
+    }
+    vaegt += (vaegtMaal - vaegt) * Math.min(1, dt * 1.6);
+    krop += kropDrej;
     if (!traek) v += (krop - v) * Math.min(1, dt * 4);
     figur.rotation.y = v; spin?.rotateY(dt * 1.2); pyntSkridt(figur, tid);
-    figur.scale.y = 1 + Math.sin(tid * 1.9) * 0.006;                 // vejrtrækning
-    const drej_ = figur.getObjectByName('drej'); if (drej_) drej_.rotation.z = Math.sin(tid * 0.42) * 0.025;     // vægten skifter fra ben til ben
+    if (drone_) { droneV += dt * 0.55; droneSted(droneV, tid); hovedX -= 0.1 + Math.max(0, Math.sin(droneV)) * 0.12; if (!vane) hovedY = Math.max(-0.6, Math.min(0.6, Math.cos(droneV) * 0.5)); }      // han følger sin drone med blikket
+    figur.scale.y = 1 + Math.sin(tid * 1.9 / L.ro) * 0.006 + loeft * 0.4;      // vejrtrækning, roligere hos de rolige
+    const drej_ = figur.getObjectByName('drej'); if (drej_) { drej_.rotation.z = vaegt * 0.03 + Math.sin(tid * 0.42) * 0.01; drej_.rotation.x = loeft * 0.6; }     // vægten på det ene ben
     if (hoved) {
-      const kig = (blik || -mus.x * 0.55) - (v - maalV) * 0.6;            // kigger på musen (eller væk et øjeblik)
+      const kig = (hovedY || blik || -mus.x * 0.55) - (v - maalV) * 0.6;            // kigger på musen (eller væk et øjeblik, eller efter en vane)
       hoved.rotation.y += (kig - hoved.rotation.y) * Math.min(1, dt * 3);
-      hoved.rotation.x += ((mus.y * 0.18) + nik - hoved.rotation.x) * Math.min(1, dt * 6);
+      hoved.rotation.x += ((mus.y * 0.18) + nik + hovedX - hoved.rotation.x) * Math.min(1, dt * 6);
     }
     if (vaaben_) vaaben_.rotation.x = vaabenHvil + vaabenNed;
     if (sk) sk.rotation.x = Math.sin(tid * 1.7) * 0.05;
-    renderer.render(scene, kamera);
+    const ok_ = figur.getObjectByName('overkrop');
+    if (ok_) ok_.rotation.set(Math.sin(tid * 1.9 / L.ro) * 0.018 + loeft * 0.5 + vaabenNed * 0.25, kropDrej * 0.5, -vaegt * 0.035);
+    zoomKamera(dt);
+    tegnBillede();
   }
   // Et stillbillede af et tårn i et outfit, til butikkens kort
+  // Portræt: lavt kamera der kigger lidt op, figuren drejet så våbnet peger skråt frem mod en,
+  // hovedet vendt mod kameraet, og kantlys i outfittets egne farver fra begge sider bagfra.
   const fotos = new Map();
-  function foto(id, temaId, trin = 4) {
-    const n = `${id}:${temaId}:${trin}:${helt(id, temaId) ? 'h' : 'g'}`;
+  const kantH = new THREE.DirectionalLight(0xffffff, 0); kantH.position.set(-5, 4, -4); scene.add(kantH);
+  const fyld = new THREE.DirectionalLight(0xffffff, 0); fyld.position.set(3, 1.2, 6); scene.add(fyld);
+  function foto(id, temaId, trin = 4, o = {}) {
+    if (o.buste && id === 'bjoern') o = { form: o.form, fyldes: 0.85, hoejde: 0.55, rul: 0, laen: 0, v: 0.6 };
+    if (o.buste) o = { v: 0.7, rul: 0, laen: 0, fov: 28, hoved: -0.3, ...o };
+    const P = { v: 0.5, hoved: -0.4, hoejde: 0.12, fov: 34, fyldes: 0.8, kant: 8, rul: -0.08, laen: 0.04, str: 520, ...o };
+    if (!helt(id, temaId) && M[heltNoegle(id, temaId)] === undefined) { hentHelt(id, temaId); return TOMT; }      // ikke hentet endnu: tomt kort, siden tegnes igen, når helten er her
+    const n = `${id}:${temaId}:${trin}:${helt(id, temaId) ? 'h' : 'g'}:${JSON.stringify(o)}`;
     if (fotos.has(n)) return fotos.get(n);
-    const gl = v; vis(id, trin, temaId); v = -0.55; figur.rotation.y = v;
-    renderer.setPixelRatio(1); renderer.setSize(360, 360, false); kamera.aspect = 1; kamera.updateProjectionMatrix();
-    renderer.render(scene, kamera); const url = laerred.toDataURL('image/png'); fotos.set(n, url); v = gl;
+    const gl = v, kp = kamera.position.clone(), kf = kamera.fov, kantFoer = [kant.color.getHex(), kant.intensity];
+    vis(id, trin, temaId); v = P.v; figur.rotation.y = v;
+    if (hoved) hoved.rotation.set(-0.06, P.hoved, 0);
+    figur.getObjectByName('overkrop')?.rotation.set(0, 0, 0);
+    if (vaaben_) vaaben_.rotation.x = vaabenHvil - 0.04;
+    const dr = figur.getObjectByName('drej'); if (dr) dr.rotation.x = P.laen;
+    figur.updateMatrixWorld(true);
+    // indramning efter det man faktisk ser (ikke usynlige trin-dele)
+    const boks = new THREE.Box3(), b_ = new THREE.Box3();
+    figur.traverseVisible((m) => { if (m.isMesh && !m.isPoints) { m.geometry.boundingBox || m.geometry.computeBoundingBox(); boks.union(b_.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld)); } });
+    const H = boks.max.y - Math.max(0, boks.min.y), midt = boks.getCenter(new THREE.Vector3());
+    const form = P.form || 1, bred = Math.max(boks.max.x - boks.min.x, boks.max.z - boks.min.z) * 0.8, fyldH = Math.max(H, bred * form);
+    kamera.fov = P.fov; kamera.aspect = 1 / form;
+    if (P.buste) {
+      // som Shop-kortene: hoved og overkrop fylder billedet, kameraet i brysthøjde. Toppen er hovedet (ikke flag og antenner).
+      const hb = new THREE.Box3(); (hoved || figur).traverseVisible((m) => { if (m.isMesh) { m.geometry.boundingBox || m.geometry.computeBoundingBox(); hb.union(b_.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld)); } });
+      const top = (hb.isEmpty() ? boks.max.y : hb.max.y) + H * 0.06, bund = Math.max(0, boks.min.y) + H * P.buste, vin = top - bund, cy = (top + bund) / 2;
+      const afst = (vin / 2) / Math.tan(THREE.MathUtils.degToRad(P.fov / 2));
+      kamera.position.set(midt.x * 0.3, cy + vin * 0.08, afst);
+      kamera.lookAt(midt.x * 0.3, cy, 0);
+    } else {
+    const afst = (fyldH / 2 / P.fyldes) / Math.tan(THREE.MathUtils.degToRad(P.fov / 2)) * 1.06;
+    kamera.position.set(midt.x * 0.5, Math.max(0, boks.min.y) + H * P.hoejde, afst);
+    kamera.lookAt(midt.x * 0.5, Math.max(0, boks.min.y) + H * 0.5, 0);
+    }
+    kamera.rotateZ(P.rul || 0);
+    kamera.updateProjectionMatrix();
+    const t = tema(temaId), farve = new THREE.Color(t.lys || t.k1 || '#db242e'), farve2 = new THREE.Color(t.k2 && t.id !== 'std' ? t.lys || t.k2 : '#ff4a4a');
+    kant.color.copy(farve); kant.intensity = P.kant ?? 3.2; kantH.color.copy(farve2).lerp(new THREE.Color(0xffffff), 0.35); kantH.intensity = (P.kant ?? 3.2) * 0.7; fyld.intensity = 0.7;
+    renderer.setPixelRatio(1); renderer.setSize(P.str, Math.round(P.str * form), false);
+    tegnBillede(); const url = laerred.toDataURL('image/png'); fotos.set(n, url);
+    v = gl; kamera.position.copy(kp); kamera.fov = kf; kamera.updateProjectionMatrix(); kant.color.setHex(kantFoer[0]); kant.intensity = kantFoer[1]; kantH.intensity = 0; fyld.intensity = 0;
     laerred.width = 0; return url;
   }
   return { vis, tegn, foto, hils: () => { hilsT = tid; v = -1.25; } };

@@ -24,6 +24,8 @@ export const VEJ = 46;                 // vejens bredde
 export const START = { penge: 700, liv: 100, moenter: 400, ejer: ['vagt', 'skytte', 'moelle'], udstyr: ['vagt', 'skytte', 'moelle'] };
 export const SALG = 0.6;               // andel af det brugte, man får igen
 export const MAKS_MOELLER = 5;
+// Højst så mange tårne på banen i alt (møller tæller med). Kasernens tropper tæller ikke.
+export const MAKS_TAARNE = 17;
 
 // art bestemmer, hvordan tårnet virker (se sim.js). trin[0] er prisen for at stille det; resten er opgraderinger.
 export const TAARNE = [
@@ -71,9 +73,30 @@ export const FJENDER = {
   panser:   { navn: 'Panser', fl: 'pansere',   hp: 50,   fart: 44,  dusoer: 45,   liv: 3,   r: 13, str: 1, panser: 2, modstand: { spraeng: 0.5 } },
   svaerm:   { navn: 'Sværm', fl: 'i sværm',   hp: 3,    fart: 80,  dusoer: 4,    liv: 1,   r: 6,  str: 1 },
   kaempe:   { navn: 'Kæmpe', fl: 'kæmper',   hp: 420,  fart: 26,  dusoer: 320,  liv: 20,  r: 20, str: .8 },
-  vogter:   { navn: 'Vogter',   hp: 900,  fart: 24,  dusoer: 900,  liv: 50,  r: 24, str: 1, boss: 1 },
-  hersker:  { navn: 'Hersker',  hp: 2600, fart: 22,  dusoer: 2600, liv: 100, r: 26, str: 1.15, boss: 1, panser: 3, modstand: { lyn: 0.5 } },
-  hoevding: { navn: 'Høvding',  hp: 9000, fart: 18,  dusoer: 0,    liv: 999, r: 30, str: 1.4, boss: 1, panser: 4, yngel: ['loeber', 2.5] },
+  // faser: [andel af livet, hvad bossen gør]. kald = [monster, antal] lige bag sig, skjold = skjold til monstrene omkring sig,
+  // skal = sekunder, hvor den ikke kan tage skade, raseri = [sekunder, gange så hurtig], panser = ekstra panser resten af kampen.
+  vogter:   { navn: 'Vogter',   hp: 900,  fart: 24,  dusoer: 900,  liv: 50,  r: 24, str: 1, boss: 1,
+              faser: [[0.5, { tekst: 'Vogteren brøler', skjold: 0.3, raseri: [4, 1.5] }]] },
+  hersker:  { navn: 'Hersker',  hp: 2600, fart: 22,  dusoer: 2600, liv: 100, r: 26, str: 1.15, boss: 1, panser: 3, modstand: { lyn: 0.5 },
+              faser: [[0.66, { tekst: 'Herskeren kalder skyggerne', kald: ['skygge', 6] }], [0.33, { tekst: 'Herskeren raser', raseri: [5, 1.6], skal: 1.5 }]] },
+  hoevding: { navn: 'Høvding',  hp: 9000, fart: 18,  dusoer: 0,    liv: 999, r: 30, str: 1.4, boss: 1, panser: 4, yngel: ['loeber', 2.5],
+              faser: [[0.6, { tekst: 'Høvdingen kalder sine klodser', kald: ['klods', 5] }], [0.3, { tekst: 'Høvdingen gemmer sig i sværmen', kald: ['svaerm', 24], skal: 2, panser: 2 }]] },
+  // Monstre med evner. lign = hvilken model de låner, til de får deres egen.
+  // hel: [rækkevidde, andel af livet der heles, sekunder imellem]. skjold: [rækkevidde, skjold som andel af livet, sekunder imellem].
+  // spurt: [sekunder imellem, sekunder den varer, gange så hurtig]. hop: [sekunder imellem, længde, sekunder i luften (kan ikke rammes)].
+  heler:    { navn: 'Heler', fl: 'helere',     hp: 26,   fart: 40,  dusoer: 30,   liv: 2,   r: 11, str: 1, lign: 'kryb', hel: [70, 0.06, 2.5] },
+  skjold:   { navn: 'Skjoldbærer', fl: 'skjoldbærere', hp: 40, fart: 38, dusoer: 40, liv: 2, r: 12, str: 1.05, lign: 'panser', skjold: [65, 0.35, 5] },
+  spurter:  { navn: 'Spurter', fl: 'spurtere',  hp: 9,    fart: 60,  dusoer: 14,   liv: 1,   r: 9,  str: 1, lign: 'loeber', spurt: [4, 1.1, 2.8] },
+  springer: { navn: 'Springer', fl: 'springere', hp: 18,  fart: 48,  dusoer: 22,   liv: 1,   r: 10, str: 1, lign: 'kryb', hop: [3.5, 70, 0.55] },
+  // Hr Hund (w23g): en sort labrador, der kun kan dukke op i den sidste bølge, med 7 % chance.
+  // Han spurter, springer, skærmer monstrene omkring sig og heler sig selv. Slipper han igennem, koster det 80 liv.
+  hrhund:   { navn: 'Hr Hund · w23g', fl: 'Hr Hund', hp: 5000, fart: 30, dusoer: 3000, liv: 80, r: 28, str: 1.3, boss: 1, panser: 3, lign: 'kaempe',
+              spurt: [7, 1.4, 2.4], hop: [9, 90, 0.8], skjold: [90, 0.25, 8], regen: 0.002, sjaelden: 0.07,
+              faser: [[0.5, { tekst: 'Hr Hund gør', raseri: [3, 1.5] }]] },
+  // Dæmonen: den sidste og sværeste boss. Kommer altid helt til sidst i den sidste bølge, efter alt andet.
+  daemon:   { navn: 'Dæmonen', fl: 'Dæmonen', hp: 13500, fart: 16, dusoer: 0, liv: 999, r: 32, str: 1.6, boss: 1, panser: 4, lign: 'hersker',
+              skjold: [110, 0.3, 7], hel: [110, 0.05, 3], regen: 0.001, modstand: { ild: 0.5 },
+              faser: [[0.75, { tekst: 'Dæmonen åbner himlen', kald: ['flyver', 8], skal: 2 }], [0.5, { tekst: 'Dæmonen hærder huden', skal: 3, skjold: 0.4, panser: 2 }], [0.25, { tekst: 'Dæmonen raser', raseri: [6, 1.7], kald: ['spurter', 10] }]] },
 };
 
 // En bølge er grupper: [fjende, antal, sekunder imellem, pause efter gruppen]. Negativ pause = næste gruppe kommer samtidig.
@@ -113,6 +136,9 @@ export const BOELGER = [
 
 // Flyvere blandes ind i bølgerne fra bølge 6. Dem kan kun nogle tårne ramme.
 for (const [w, n] of [[6, 5], [9, 8], [12, 10], [14, 12], [17, 16], [19, 18], [22, 22], [24, 26], [27, 30], [29, 36]]) BOELGER[w - 1].push(g('flyver', n, 0.6, 1));
+// Monstrene med evner kommer ind lidt ad gangen, så hver bølge føles forskellig.
+for (const [type, liste] of [['spurter', [[4, 6], [8, 10], [13, 14], [18, 20], [23, 26], [28, 30]]], ['heler', [[7, 2], [11, 3], [16, 4], [21, 6], [26, 8], [30, 10]]],
+  ['springer', [[9, 6], [14, 10], [19, 14], [24, 18], [29, 22]]], ['skjold', [[12, 2], [15, 3], [20, 4], [25, 6], [28, 8]]]]) for (const [w, n] of liste) BOELGER[w - 1].push(g(type, n, 0.9, 1));
 // bløde toppe: bølge 6, 17 og 20 kræver stadig den rigtige plan, men er ikke en mur
 const tilpas = (w, type, n) => { const x = BOELGER[w - 1].find((e) => e[0] === type); if (x) x[1] = n; };
 tilpas(6, 'loeber', 7); tilpas(17, 'svaerm', 46); tilpas(17, 'flyver', 12); tilpas(20, 'panser', 9);

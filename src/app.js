@@ -1,5 +1,5 @@
 // Skærmene: forside, arsenal og kamp. Reglerne er i sim.js, det man ser i se.js.
-import { TAARNE, FJENDER, BANER, START, MAKS_MOELLER, LAAS_BOELGE } from './data.js';
+import { TAARNE, FJENDER, BANER, START, MAKS_MOELLER, MAKS_TAARNE, LAAS_BOELGE } from './data.js';
 import * as sim from './sim.js';
 import { hentModeller, hentBy, lavVisning, lavFremviser, hentHelte, heltKlar } from './se.js';
 import { spil as lyd, saetLyd, saetStemning, pludre } from './lyd.js';
@@ -23,7 +23,8 @@ if (!BANER.some((b) => b.id === gem.bane)) gem.bane = BANER[0].id;      // banen
 gem.svaer ||= 'normal';
 gem.outfits ||= [];                // de outfits, man ejer
 gem.paa ||= {};                    // hvilket outfit hvert tårn har på
-gem.indst = { grafik: true, skygger: true, skarp: true, stemning: true, glid: true, online: true, diorama: true, snak: true, ...(gem.indst || {}) };
+const lilleSkaerm = Math.min(innerWidth, innerHeight) < 600;
+gem.indst = { grafik: !lilleSkaerm, skygger: true, skarp: true, stemning: true, glid: true, online: true, diorama: true, snak: true, ...(gem.indst || {}) };
 let macTillader = true;            // i Mac-appen kan zfeeka slå online fra
 const husk = () => { try { localStorage.setItem(NOEGLE, JSON.stringify(gem)); } catch {} };
 const ejerKonto = () => !!gem.ejerKonto;
@@ -64,6 +65,7 @@ function gaaTil(n, lydløs) {
   document.querySelectorAll('#faner button').forEach((b, i) => b.classList.toggle('paa', i === nr));
   const kn = document.querySelector(`#faner button[data-s="${nr}"]`), m = $('markoer');
   m.style.width = kn.offsetWidth + 'px'; m.style.transform = `translateX(${kn.offsetLeft - 4}px)`;
+  const fn = $('faner'); if (fn.scrollWidth > fn.clientWidth) fn.scrollTo({ left: kn.offsetLeft - (fn.clientWidth - kn.offsetWidth) / 2, behavior: lydløs ? 'auto' : 'smooth' });
   $('prikker').innerHTML = SIDER.map((_, i) => `<i class="${i === nr ? 'paa' : ''}"></i>`).join('');
   if (!lydløs) lyd('klik');
   if (SIDER[nr] === 'start' && fremviser3 && sidsteSide !== 'start') fremviser3.hils();        // figuren hilser, hver gang man kommer til forsiden
@@ -102,6 +104,7 @@ $('hub').addEventListener('wheel', (e) => {
 }, { passive: true });
 let traek = null;
 $('spor').addEventListener('pointerdown', (e) => { if (e.target.closest('button, input, canvas, .rul')) return; traek = { x: e.clientX, t: performance.now() }; });
+addEventListener('pointercancel', () => { traek = null; });
 addEventListener('pointerup', (e) => { if (!traek) return; const dx = e.clientX - traek.x; if (Math.abs(dx) > 80) gaaTil(nr - Math.sign(dx)); traek = null; });
 addEventListener('keydown', (e) => {
   if (side !== 'hub' || e.target.tagName === 'INPUT') return;
@@ -115,7 +118,7 @@ addEventListener('resize', () => { if (side === 'hub') gaaTil(nr, true); });
 let startFigur = null;
 function startSide() {
   if (!fremviser3) { fremviser3 = lavFremviser($('skive3'), { udenSokkel: true }); setTimeout(() => fremviser3.hils(), 400); }
-  fotograf ||= lavFremviser(document.createElement('canvas'));
+  fotograf ||= lavFremviser(document.createElement('canvas'), { staa: true });
   const ejede = TAARNE.filter((d) => ejerTaarn(d.id));
   if (!startFigur) { const d = ejede[Math.random() * ejede.length | 0] || TAARNE[0]; startFigur = d.id; }
   if (fremviser3.vist !== startFigur + (gem.paa[startFigur] || '')) { fremviser3.vist = startFigur + (gem.paa[startFigur] || ''); fremviser3.vis(startFigur, 3, gem.paa[startFigur]); }
@@ -193,7 +196,7 @@ $('spil').onclick = () => { lyd('klik'); startKamp(); };
 // ---------- Arsenal ----------
 let valgtKort = 'vagt', valgtTrin = 0, bytter = null;
 function arsenal() {
-  fremviser ||= lavFremviser($('skive'));
+  fremviser ||= lavFremviser($('skive'), { staa: true });
   const el = $('kort'); el.innerHTML = '';
   for (const d of TAARNE) {
     const ejer = ejerTaarn(d.id);
@@ -223,14 +226,15 @@ function arsenal() {
 let gTaarn = 'vagt', gTema = null, gTrin = 4;
 function farveprikker(t) { return t.id === 'std' ? '' : `<div class="farver">${[t.k1, t.k2, t.lys].filter(Boolean).map((f) => `<i style="background:${f}"></i>`).join('')}</div>`; }
 function garderobe() {
-  fremviser2 ||= lavFremviser($('skive2')); fotograf ||= lavFremviser(document.createElement('canvas'));
+  hentTil(TEMAER.map((t) => [gTaarn, t.id]));      // også når man skifter tårn inde i garderoben; siden tegnes igen, når heltene er hentet
+  fremviser2 ||= lavFremviser($('skive2'), { staa: true }); fotograf ||= lavFremviser(document.createElement('canvas'), { staa: true });
   const tv = $('gTaarne'); tv.innerHTML = '';
   for (const d of TAARNE) { const b = h('button', gTaarn === d.id ? 'paa' : '', billede(d.id)); b.title = d.navn; b.onclick = () => { gTaarn = d.id; gTema = null; lyd('klik'); garderobe(); }; tv.append(b); }
   const valgt = gTema || gem.paa[gTaarn] || 'std';
   const el = $('gOutfits'); el.innerHTML = '';
   for (const t of TEMAER) {
     const id = outfitId(gTaarn, t.id), ejer = ejerOutfit(id), paa = (gem.paa[gTaarn] || 'std') === t.id;
-    const k = h('button', 'kort outfit' + (valgt === t.id ? ' paa' : '') + (ejer ? '' : ' laast') + (paa ? ' med' : ''), `<div class="mini" style="--glod:${t.lys || t.k1 || '#db242e'}44"><img src="${fotograf.foto(gTaarn, t.id, 2)}" alt="" draggable="false"></div><b>${t.navn}</b><span class="sj sj-${sjaeldenhed(t.pris)}">${t.id === 'std' ? 'Standard' : sjaeldenhed(t.pris)}</span>${farveprikker(t)}<span>${ejer ? (paa ? 'På' : 'Ejet') : ikon('gem') + tal(t.pris)}</span>`);
+    const k = h('button', 'kort outfit' + (valgt === t.id ? ' paa' : '') + (ejer ? '' : ' laast') + (paa ? ' med' : ''), `<div class="mini" style="--glod:${t.lys || t.k1 || '#db242e'}44"><img src="${fotograf.foto(gTaarn, t.id, 2, { buste: 0.42 })}" alt="" draggable="false"></div><b>${t.navn}</b><span class="sj sj-${sjaeldenhed(t.pris)}">${t.id === 'std' ? 'Standard' : sjaeldenhed(t.pris)}</span>${farveprikker(t)}<span>${ejer ? (paa ? 'På' : 'Ejet') : ikon('gem') + tal(t.pris)}</span>`);
     k.onclick = () => { gTema = t.id; lyd('klik'); garderobe(); };
     el.append(k);
   }
@@ -257,14 +261,14 @@ function koeb(id, pris, saa) {
 // ---------- Butik ----------
 let butikDag = null, butikUr = 0;
 function butik() {
-  fotograf ||= lavFremviser(document.createElement('canvas'));
+  fotograf ||= lavFremviser(document.createElement('canvas'), { staa: true });
   const varer = dagensButik(), el = $('butik');
   const klar = String(varer.filter((o) => heltKlar(o.taarn, o.tema)).length);
   if (butikDag !== dag() || el.dataset.ejer !== String(ejerKonto()) || el.dataset.n !== String(gem.outfits.length) || el.dataset.h !== klar) {
     butikDag = dag(); el.dataset.ejer = ejerKonto(); el.dataset.n = gem.outfits.length; el.dataset.h = klar; el.innerHTML = '';
     for (const o of varer) {
       const t = tema(o.tema), ejer = ejerOutfit(o.id);
-      const k = h('button', 'vare glas' + (ejer ? ' ejet' : ''), `<div class="foto" style="--glod:${t.lys || t.k1}55"><img src="${fotograf.foto(o.taarn, o.tema)}" alt="" draggable="false"></div><b>${t.navn}</b><span>${T[o.taarn].navn} · <span class="sj sj-${sjaeldenhed(o.pris)}">${sjaeldenhed(o.pris)}</span></span><div class="pris">${ejer ? 'Ejet' : ikon('gem') + tal(o.pris)}</div>`);
+      const k = h('button', 'vare glas' + (ejer ? ' ejet' : ''), `<div class="foto" style="--glod:${t.lys || t.k1}55"><img src="${fotograf.foto(o.taarn, o.tema, 4, { form: 4 / 3 })}" alt="" draggable="false"></div><b>${t.navn}</b><span>${T[o.taarn].navn} · <span class="sj sj-${sjaeldenhed(o.pris)}">${sjaeldenhed(o.pris)}</span></span><div class="pris">${ejer ? 'Ejet' : ikon('gem') + tal(o.pris)}</div>`);
       k.onclick = () => { if (!ejer) koeb(o.id, o.pris, () => butik()); else { gTaarn = o.taarn; gTema = o.tema; gaaTil(SIDER.indexOf('garderobe')); } };
       el.append(k);
     }
@@ -276,7 +280,7 @@ function butik() {
 // ---------- Indstillinger ----------
 const INDST = [
   ['Billede', [['diorama', 'Byer som ø'], ['grafik', 'Dybdeskarphed og glød'], ['skygger', 'Skygger'], ['skarp', 'Høj opløsning'], ['glid', 'Bløde kamerabevægelser']]],
-  ['Lyd', [['lyd', 'Lyd'], ['stemning', 'Baggrundslyd'], ['snak', 'Monstre snakker']]],
+  ['Lyd', [['lyd', 'Lyd'], ['stemning', 'Baggrundslyd']]],
   ['Spil', [['auto', 'Start næste bølge selv'], ['online', 'Online (beta)']]],
 ];
 function indstillinger() {
@@ -348,7 +352,7 @@ async function startKamp(vs) {
   const baneId = vs ? vs.bane : gem.bane, valgt_ = BANER.find((b) => b.id === baneId) || BANER[0];
   if (valgt_.by) { $('hent').classList.remove('vaek'); $('hentLinje').style.width = '35%'; await hentBy(valgt_.by); $('hentLinje').style.width = '100%'; $('hent').classList.add('vaek'); }      // byerne hentes, når de skal bruges
   $('hent').classList.remove('vaek'); await hentHelte([...gem.udstyr.map((id) => [id, gem.paa[id] || 'std']), ...(gem.udstyr.includes('kaserne') ? ['enhed', 'jeep', 'apc', 'kampvogn'].map((e) => [e, gem.paa.kaserne || 'std']) : [])]); $('hent').classList.add('vaek');      // de nye helte til de tårne, man har med
-  vis('kamp'); if (!se) { se = lavVisning($('rum'), $('lag')); se.naarSnak((h, n, s_) => { if (gem.indst.snak) pludre(h, n, s_); }); }
+  vis('kamp'); if (!se) { se = lavVisning($('rum'), $('lag')); se.naarSnak((h, n, s_) => {  }); }
   g = sim.nytSpil(baneId, gem.udstyr, vs ? 'normal' : gem.svaer); if (vs) g.versus = vs; placerer = null; valgt = null; pause = false; udbetalt = false; fart = 1;
   $('fart').textContent = '1×'; document.body.classList.remove('pauset'); $('slut').hidden = true; $('valgt').hidden = true;
   se.saetOutfits(gem.paa); brugIndst(); se.saetSpil(g); se.stoerrelse();
@@ -439,15 +443,17 @@ function saelg() { if (valgt) { sim.saelg(g, valgt); vaelgTaarn(null); } }
 const rum = $('rum');
 let drejet = 0, traekker = false, trukket = 0;
 rum.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;
   if ((e.buttons & 1) && traekker) { trukket += Math.abs(e.movementX) + Math.abs(e.movementY); se.flyt(-e.movementX, -e.movementY); }      // træk i banen flytter udsnittet
   if (e.buttons & 2) { drejet += Math.abs(e.movementX) + Math.abs(e.movementY); se.drej(e.movementX, e.movementY); }     // højre museknap holdt nede drejer kameraet
   mus = se.tilFelt(e.clientX, e.clientY); flytMus();
 });
 rum.addEventListener('wheel', (e) => { e.preventDefault(); se.rul(e); mus = se.tilFelt(e.clientX, e.clientY); }, { passive: false });
-rum.addEventListener('pointerup', (e) => { if (e.button === 0 && traekker) { traekker = false; if (trukket < 5) vaelgTaarn(null); } });
+rum.addEventListener('pointerup', (e) => { if (e.pointerType === 'touch') return; if (e.button === 0 && traekker) { traekker = false; if (trukket < 5) vaelgTaarn(null); } });
 rum.addEventListener('pointerleave', () => { mus = null; if (placerer) se.spoegelse(null); });
 rum.addEventListener('contextmenu', (e) => { e.preventDefault(); if (drejet > 4) return; if (placerer) vaelgSlot(placerer); else vaelgTaarn(null); });
 rum.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch') return;
   if (e.button === 2) { drejet = 0; rum.setPointerCapture(e.pointerId); }
   if (e.button !== 0 || !g) return;
   const p = se.tilFelt(e.clientX, e.clientY); if (!p) return;
@@ -483,6 +489,46 @@ addEventListener('keydown', (e) => {
   else if (k === '-') se.zoomTrin(0.8);
 });
 addEventListener('resize', () => { if (side === 'kamp') se?.stoerrelse(); });
+// Touch: tryk vælger eller placerer (man kan trække spøgelset på plads og slippe), én finger flytter, knib zoomer, to fingre drejer og vipper.
+const fingre = new Map();
+let fing = null;
+const fingerPar = () => { const [a, b] = [...fingre.values()]; return { d: Math.hypot(b.x - a.x, b.y - a.y) || 1, v: Math.atan2(b.y - a.y, b.x - a.x), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+rum.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch' || !g) return;
+  rum.setPointerCapture(e.pointerId); fingre.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (fingre.size === 1) { fing = { x: e.clientX, y: e.clientY, flyttet: 0, to: null }; if (placerer) { mus = se.tilFelt(e.clientX, e.clientY); flytMus(); } }
+  else if (fingre.size === 2 && fing) fing.to = fingerPar();
+});
+rum.addEventListener('pointermove', (e) => {
+  if (e.pointerType !== 'touch' || !fing || !fingre.has(e.pointerId)) return;
+  const f = fingre.get(e.pointerId), dx = e.clientX - f.x, dy = e.clientY - f.y; f.x = e.clientX; f.y = e.clientY;
+  if (fingre.size >= 2 && fing.to) {
+    const n = fingerPar(), o = fing.to; let dv = n.v - o.v; if (dv > Math.PI) dv -= 2 * Math.PI; if (dv < -Math.PI) dv += 2 * Math.PI;
+    se.rul({ ctrlKey: true, deltaY: -Math.log(n.d / o.d) / 0.012, clientX: n.x, clientY: n.y });
+    se.drej(dv / 0.006, (o.y - n.y) * 1.4); fing.to = n; fing.flyttet = 99;
+    return;
+  }
+  fing.flyttet += Math.abs(dx) + Math.abs(dy);
+  if (placerer) { mus = se.tilFelt(e.clientX, e.clientY); flytMus(); }
+  else if (fing.flyttet > 10) se.flyt(-dx, -dy);
+});
+const slipFinger = (e) => {
+  if (e.pointerType !== 'touch' || !fingre.has(e.pointerId)) return;
+  fingre.delete(e.pointerId);
+  if (fingre.size || !fing) return;
+  const f = fing; fing = null;
+  if (e.type === 'pointercancel' || !g || f.to) return;
+  const p = se.tilFelt(e.clientX, e.clientY); if (!p) return;
+  if (placerer) { if (sim.placer(g, placerer, p.x, p.y)) { placerer = null; se.spoegelse(null); } return; }
+  if (f.flyttet > 10) return;
+  let bedst = null, bd = 44;
+  for (const t of g.taarne) { const d = Math.hypot(t.x - p.x, t.y - p.y); if (d < bd) { bd = d; bedst = t; } }
+  vaelgTaarn(bedst);
+};
+rum.addEventListener('pointerup', slipFinger);
+rum.addEventListener('pointercancel', slipFinger);
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('dblclick', (e) => e.preventDefault());
 // Mellemrum: et kort tryk sætter på pause; holdes den nede, kører spillet fire gange så hurtigt, til man slipper.
 let mellemrum = null;
 addEventListener('keyup', (e) => {
@@ -491,7 +537,7 @@ addEventListener('keyup', (e) => {
   mellemrum = null; $('fart').classList.remove('paa'); $('fart').textContent = fart + '×';
 });
 addEventListener('blur', () => { mellemrum = null; });
-$('fart').onclick = () => { fart = fart === 1 ? 2 : fart === 2 ? 3 : 1; $('fart').textContent = fart + '×'; lyd('klik'); };
+$('fart').onclick = () => { fart = fart === 1 ? 2 : fart === 2 ? 4 : 1; $('fart').textContent = fart + '×'; lyd('klik'); };
 $('pause').onclick = () => { pause = !pause; $('pause').innerHTML = ikon(pause ? 'play' : 'pause'); $('pause').classList.toggle('paa', pause); document.body.classList.toggle('pauset', pause); };
 const visAuto = () => { $('auto').classList.toggle('paa', !!gem.auto); };
 $('auto').onclick = () => { gem.auto = !gem.auto; husk(); visAuto(); lyd('klik'); };
@@ -524,9 +570,10 @@ function hud() {
   saet('liv', g.liv); saet('penge', tal(g.penge)); saet('boelge', `${Math.max(1, g.boelge + (g.fase === 'vent' ? 1 : 0))}${g.versus ? '' : ' / ' + g.antal}`);
   if (g.versus) { for (const b of $('send').children) b.classList.toggle('dyr', g.penge < SEND[+b.dataset.i].pris); if (g.t - (g.sidstStatus || -9) > 1) { g.sidstStatus = g.t; online.status(g); } }
   $('liv').parentElement.classList.toggle('lav', g.liv <= 30);
+  saet('antal', `${g.taarne.length} / ${MAKS_TAARNE}`); $('antal').parentElement.classList.toggle('fuld', g.taarne.length >= MAKS_TAARNE);
   for (const s of $('dok').children) {
     const id = s.dataset.id, d = T[id];
-    s.classList.toggle('dyr', g.penge < d.trin[0].pris || (d.art === 'moelle' && g.taarne.filter((t) => t.def.art === 'moelle').length >= MAKS_MOELLER));
+    s.classList.toggle('dyr', g.penge < d.trin[0].pris || g.taarne.length >= MAKS_TAARNE || (d.art === 'moelle' && g.taarne.filter((t) => t.def.art === 'moelle').length >= MAKS_MOELLER));
     s.classList.toggle('paa', placerer === id);
   }
   const venter = g.fase === 'vent';
