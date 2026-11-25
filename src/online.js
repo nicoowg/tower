@@ -197,8 +197,13 @@ export function lavOnline(api) {
   function forlad() { if (k) nulstil(); }
   const ikon = (n) => `<span class="i" style="--u:url(ikon/${n}.svg)"></span>`;
 
+  // styres fra hvisk (chatten): opret med valgt tilstand, start når alle er klar, og læs status
+  function kanStarte() { if (!lobby || !vaert || iKamp) return false; const fuld = lobby.spillere.length >= 2, alleKlar = lobby.spillere.every((s) => s.klar || s.vaert), holdOk = lobby.tilstand === 'alle' || [0, 1].every((h) => lobby.spillere.some((s) => s.hold === h)); return fuld && alleKlar && holdOk; }
   return {
     side, join, forlad, opret,
+    opretMed: (t) => { if (TILSTANDE[t]) valgtTilstand = t; return opret(); },
+    startNu: () => { if (!kanStarte()) return false; startKamp(); return true; },
+    info: () => lobby ? { kode: lobby.kode, tilstand: lobby.tilstand, bane: lobby.bane, vaert, iKamp, kanStarte: kanStarte(), spillere: lobby.spillere.map((s) => ({ navn: s.navn, klar: !!(s.klar || s.vaert), hold: s.hold })) } : null,
     iLobby: () => !!lobby, vaert: () => vaert, forbundet: () => (k ? server : null),
     skiftBane: (id) => { if (vaert && lobby && !iKamp) { lobby.bane = id; delLobby(); } },
     status: (g) => { if (iKamp) tilV({ t: 'status', liv: g.liv, boelge: g.boelge, ude: g.liv <= 0 }); },

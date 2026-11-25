@@ -621,7 +621,12 @@ hentModeller((u) => { $('hentLinje').style.width = u * 100 + '%'; }).then(async 
   const q = new URLSearchParams(location.search);
   requestAnimationFrame(ramme);
   if (!gem.navn && !q.get('side')) await spoergNavn();
+  window.__tower = { info: () => online.info(), start: () => online.startNu() };     // hvisk læser og starter herfra (samme origin)
   if (q.get('lobby')) { hub(SIDER.indexOf('online')); online.join(q.get('lobby')); return; }
+  if (q.get('opret')) {                                                                    // åbnet fra hvisk: opret lobby med valgt bane og tilstand
+    const vb = q.get('bane'); if (vb && aabenId(vb)) { gem.bane = vb; husk(); }
+    hub(SIDER.indexOf('online')); online.opretMed(q.get('opret')); return;
+  }
   if (q.get('side') === 'kamp') startKamp();
   else { if (q.get('kort')) valgtKort = q.get('kort'); hub(Math.max(0, SIDER.indexOf(q.get('side')))); }
 });
